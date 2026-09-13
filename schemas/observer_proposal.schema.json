@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://les-slimes.local/schemas/observer_proposal.schema.json",
+  "title": "Les Slimes Observer Proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "summary", "confidence", "evidence"],
+  "properties": {
+    "type": {
+      "enum": [
+        "observation",
+        "hypothesis",
+        "experiment_proposal",
+        "behavior_candidate",
+        "world_event_proposal",
+        "mystery_proposal"
+      ]
+    },
+    "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "evidence": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "maxItems": 50
+    },
+    "parameters": {"type": "object"}
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "type": "behavior_candidate",
+  "summary": "Les Slimes très affaiblis pourraient économiser leur énergie en restant immobiles.",
+  "confidence": 0.72,
+  "evidence": [
+    "Hypothèse à tester en Sandbox, pas une conclusion scientifique"
+  ],
+  "parameters": {
+    "rule": {
+      "name": "Repos sous énergie critique",
+      "priority": 80,
+      "conditions": [
+        {"type": "energy_below", "value": 18}
+      ],
+      "action": "rest",
+      "parameters": {}
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "type": "world_event_proposal",
+  "summary": "Déposer un petit amas de nourriture au centre pour tester la convergence sociale.",
+  "confidence": 0.65,
+  "evidence": [
+    "Expérience interventionnelle Sandbox"
+  ],
+  "parameters": {
+    "action": "deposit_food",
+    "x": 60,
+    "y": 40,
+    "count": 5
+  }
+}

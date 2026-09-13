@@ -1,0 +1,21 @@
+{
+  "type": "mystery_proposal",
+  "summary": "Introduire un fragment inconnu qui produit secrètement une impulsion S3 lorsqu'un Slime l'active.",
+  "confidence": 0.60,
+  "evidence": [
+    "Intervention narrative Sandbox volontaire"
+  ],
+  "parameters": {
+    "mystery": {
+      "public_label": "Fragment X",
+      "x": 60,
+      "y": 40,
+      "radius": 2.5,
+      "effect": "signal_pulse",
+      "parameters": {
+        "signal": "S3",
+        "radius": 10
+      }
+    }
+  }
+}
