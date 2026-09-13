@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "les-slimes"
+version = "0.9.0a1"
+description = "Deterministic artificial-life simulation for Les Slimes."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dashboard = [
+  "streamlit>=1.40",
+  "pandas>=2.2",
+]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+les-slimes = "les_slimes.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"

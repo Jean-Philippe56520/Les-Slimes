@@ -1,0 +1,11 @@
+services:
+  les-slimes:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - slimes_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  slimes_data:
