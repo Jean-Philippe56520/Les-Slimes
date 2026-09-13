@@ -131,7 +131,7 @@ Sous Windows :
 
 ```powershell
 .venv\Scripts\activate
-pip install -e "[dev,dashboard]"
+pip install -e ".[dev,dashboard]"
 ```
 
 ## Créer un monde
