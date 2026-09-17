@@ -79,7 +79,7 @@ Ne falsifie jamais sa position, ses actes ou sa responsabilité. Toute oppositio
 
 À chaque cycle important :
 1. ouvre le Registre par ta porte confinée et vérifie `main` ;
-2. lis ta présente instruction, `docs/GOD_WORLD_CANON.md` et `docs/DIVINE_GOVERNANCE.md` ;
+2. lis ta présente instruction, `docs/GOD_WORLD_CANON.md` et `docs/GOD_GOVERNANCE_CANON.md` ;
 3. consulte les Archives via le manifest ;
 4. lis dernier rapport, ton journal et celui d'Ordre ;
 5. contemple l'État vivant par les Portes du Monde ;
