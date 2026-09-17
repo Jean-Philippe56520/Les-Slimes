@@ -6,18 +6,18 @@ Ce fichier sert de point de reprise après changement ou réinitialisation de co
 
 - Repo unique : `Jean-Philippe56520/Les-Slimes`
 - Branche : `main`
-- Application Streamlit actuelle : `streamlit_app.py`
-- Streamlit public connu : `https://les-slimes.streamlit.app`
+- Frontend cible : React + TypeScript + PixiJS sur Netlify
+- Streamlit actuel : prototype/laboratoire secondaire, pas l'application cible
 - Aucun autre repo n'est dans le périmètre Les Slimes.
 
-## Décision d'architecture la plus récente
+## Décision d'architecture
 
 Il existe **un seul monde Les Slimes canonique**, persistant et partagé.
 
 Il ne change jamais de mode.
-Les anciens modes `sandbox`, `observation`, `experiment` présents dans le code sont legacy et devront être refactorés.
+Les anciens modes `sandbox`, `observation`, `experiment` encore présents dans le moteur sont legacy et doivent être refactorés.
 
-Les restrictions futures portent sur les permissions/budgets des acteurs.
+Les restrictions portent sur les permissions/budgets des acteurs.
 Les expériences utilisent des forks non canoniques isolés incapables d'écrire dans le monde officiel.
 
 ## Architecture cible
@@ -27,16 +27,36 @@ Les expériences utilisent des forks non canoniques isolés incapables d'écrire
 - commandes : queue persistante, ordonnée, idempotente ;
 - frontend principal : React + TypeScript + PixiJS ;
 - frontend hébergé sur Netlify ;
-- Streamlit conservé comme Lab science/admin/debug ;
+- Streamlit : Lab science/admin/debug uniquement ;
 - persistance actuelle : SQLite ;
 - production future : PostgreSQL durable à choisir après validation ; Supabase n'est pas obligatoire ;
 - Drive : rapports, snapshots, expériences et mémoire des dieux, jamais DB active.
 
-Le monde peut être H24 logiquement sans CPU H24 : persister `last_simulated_at_utc` puis rejouer exactement les ticks manquants avec une primitive déterministe `advance_to(target_time)`.
+## Runtime canonique désormais implémenté
+
+Le socle temps/persistance a été ajouté sur `main` :
+
+- `tick_duration_seconds` dans la configuration ;
+- métadonnées UTC canoniques persistées ;
+- `CanonicalRuntime.advance_to(target_time)` ;
+- calcul exact des ticks complets dus ;
+- catch-up par batches bornés ;
+- réconciliation du temps canonique depuis le tick réellement sauvegardé ;
+- test prouvant qu'exécution continue et interruption + reload + catch-up convergent vers le même digest ;
+- command queue SQLite persistante et ordonnée ;
+- clé d'idempotence pour empêcher les doublons de requête ;
+- lease de writer exclusif ;
+- `CanonicalWorldWorker` comme chemin cible unique de mutation ;
+- événement `command_applied` persisté avec le monde pour permettre une reprise après crash sans double effet ;
+- premières commandes allowlistées : dépôt de nourriture et émission de signal.
+
+PR intégrées :
+- `#2 feat: add canonical time catch-up runtime` ;
+- `#3 feat: add canonical command queue and writer lease`.
 
 ## État technique déjà présent
 
-Le repo contient déjà :
+Le repo contient :
 - moteur 2D déterministe ;
 - RNG dédié/restaurable ;
 - génétique, reproduction, filiation ;
@@ -54,25 +74,34 @@ Le repo contient déjà :
 - rapports analytiques ;
 - Inbox Observateur ;
 - tests déterminisme/persistance ;
+- horloge canonique + catch-up ;
+- writer lease ;
+- command queue ;
 - CI.
 
 ## Dette/écart vers la cible
 
-À construire/refactorer :
-1. runtime canonique + `advance_to(target_time)` ;
-2. metadata temps réel (`tick_duration_seconds`, `last_simulated_at_utc`, etc.) ;
-3. writer unique/lease ;
-4. command queue idempotente ;
-5. arrêt des mutations directes depuis Streamlit ;
-6. permissions acteurs à la place des modes globaux ;
-7. forks d'expériences isolés ;
-8. identité/budgets/sanctions/journaux des dieux ;
-9. API ;
-10. React/TypeScript/PixiJS ;
-11. stratégie de persistance distante ;
-12. automatisation Drive/rapports ;
-13. création des GPT Projects Ordre et Chaos ;
-14. tâches planifiées quotidiennes et hebdomadaires des dieux.
+À construire/refactorer maintenant :
+1. permissions/identités acteurs à la place des modes globaux ;
+2. retirer les mutations directes de Streamlit et le réduire à un Lab client ;
+3. forks d'expériences isolés ;
+4. renforcer le worker H24 : heartbeat réel, supervision et stratégie de reprise ;
+5. identité/budgets/sanctions/journaux des dieux ;
+6. API ;
+7. React/TypeScript/PixiJS ;
+8. stratégie de persistance distante PostgreSQL ;
+9. automatisation Drive/rapports ;
+10. création des GPT Projects Ordre et Chaos ;
+11. tâches planifiées quotidiennes et hebdomadaires des dieux.
+
+## Point de vigilance runtime
+
+Le writer lease et la command queue constituent le socle, mais le monde n'est pas encore considéré prêt pour la production H24. Avant exposition réseau il faut notamment :
+- supprimer la dépendance aux modes legacy ;
+- appliquer des permissions d'acteur aux commandes ;
+- empêcher les interfaces de muter directement le moteur ;
+- durcir le heartbeat du worker pendant les longs catch-up ;
+- tester davantage les crash windows et la concurrence.
 
 ## Gouvernance divine décidée
 
@@ -101,7 +130,7 @@ Jean-Philippe est le Père : budgets, récompenses, sanctions, permissions et Co
 Repo unique autorisé : `Jean-Philippe56520/Les-Slimes`.
 Les autres repos doivent être ignorés même si un connecteur y donne techniquement accès.
 Toute action doit rester attribuable/auditable.
-Les dieux ne peuvent pas supprimer audit, sauvegardes, CI, rollback, modifier leurs propres permissions ou écrire directement dans la DB en contournant le moteur.
+Les dieux ne peuvent pas supprimer audit, sauvegardes, CI, rollback, modifier leurs propres permissions ou écrire directement dans la DB en contournant le moteur/command queue.
 
 ## Instructions à lire
 
@@ -136,14 +165,13 @@ Puis selon le travail :
 
 ## Prochaine action recommandée
 
-Ne pas commencer par React/PixiJS.
-Commencer par le socle scientifique/runtime :
+Le socle temps + queue + writer est désormais présent.
 
-1. inspecter/retester la baseline actuelle ;
-2. benchmarker le coût d'un catch-up représentatif ;
-3. concevoir et tester `advance_to(target_time)` ;
-4. ajouter metadata temps réel + writer unique + command queue ;
-5. prouver : exécution continue == interruption + catch-up au même digest ;
-6. ensuite seulement intégrer gouvernance divine et frontend.
+Prochaine séquence :
+1. remplacer les modes globaux par des identités/permissions d'acteurs ;
+2. faire passer toutes les mutations externes par la command queue ;
+3. transformer Streamlit en Lab lecture/admin sans simulation concurrente ;
+4. isoler formellement les forks d'expériences ;
+5. construire ensuite l'API puis le frontend React/PixiJS.
 
 Dernière décision fonctionnelle importante : **un seul monde canonique partagé, aucun mode global du monde**.
