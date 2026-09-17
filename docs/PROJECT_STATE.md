@@ -30,7 +30,7 @@ L'API ne simule aucun tick et ne mute jamais directement `World`. La gouvernance
 - `observer` = Observateur ;
 - `system` = mécanismes techniques.
 
-`herald` démarre actif, niveau Observation, budget nul et aucune permission mutante. Il n'est pas administrateur de la gouvernance. Seul `father` peut actuellement administrer permissions, pouvoir, budgets et sanctions via `GovernanceAdminService`.
+`herald` démarre actif, niveau Observation, budget nul et aucune permission mutante. Il n'est pas administrateur de la gouvernance. Seul `father` peut administrer permissions, pouvoir, budgets et sanctions via `GovernanceAdminService`.
 
 Ordre et Chaos ne peuvent pas usurper une identité, fabriquer une approbation, cacher l'auteur d'une action ou provoquer une violation pour la faire attribuer à un autre acteur.
 
@@ -67,7 +67,7 @@ Ordre et Chaos ne peuvent pas usurper une identité, fabriquer une approbation, 
 - `CanonicalWorkerService` pour boucle H24 ;
 - arrêt SIGINT/SIGTERM propre et libération du lease ;
 - métriques santé : tick, retard, ticks dus, backlog, plus ancienne commande, lease ;
-- CLI historique `worker-run`/`worker-status` et entrée production `les-slimes-production`.
+- entrée production `les-slimes-production`.
 
 ## Gouvernance persistante présente
 
@@ -80,13 +80,110 @@ Ordre et Chaos ne peuvent pas usurper une identité, fabriquer une approbation, 
 - intervention divine attribuée pour chaque mutation ;
 - sauvegarde monde + débit budget + état intervention + audit dans la même transaction ;
 - rejet commande + intervention transactionnel ;
-- statuts terminaux `executed`, `rejected`, `cancelled` protégés par la base ;
-- index empêchant un double débit négatif par intervention ;
+- statuts terminaux protégés par la base ;
 - audit append-only chaîné par hash ;
 - journaux, propositions et Conseil divin persistants ;
 - aucune commande d'auto-escalade ;
 - Transgression = classification auditable, jamais bypass ;
 - gouvernance exclue du digest biologique.
+
+## Autonomie divine confinée présente dans le code
+
+Le socle technique Ordre/Chaos/Créateur est maintenant implémenté et testé. Il n'est pas encore relié à des providers distants ni activé comme tâche autonome.
+
+### Frontière d'accès
+
+`src/les_slimes/divine/access.py` fournit `DivineAccessPolicy` :
+
+- repo GitHub exact `Jean-Philippe56520/Les-Slimes` ;
+- aucune surface Web générale ;
+- Drive limité à LES_SLIMES ;
+- API divine allowlistée, `/admin/...` interdite ;
+- Ordre écrit seulement sous `god/order/*` ;
+- Chaos écrit seulement sous `god/chaos/*` ;
+- lecture filtrée par surface de connaissance ;
+- chaque dieu lit sa propre instruction mais pas celle de l'autre ;
+- documentation Créateur/implémentation et code de frontière divine exclus de leur surface de connaissance ;
+- écritures de Lois limitées aux surfaces moteur/config/tests non protégées ;
+- gouvernance, auth, DB, runtime, frontière divine, CI, déploiement, frontend, docs et tests protecteurs non modifiables par une Loi divine.
+
+La règle est structurelle : capacité technique != permission.
+
+### Passerelles divines
+
+`src/les_slimes/divine/git_gateway.py` :
+
+- `DivineGitGateway` hard-pin le repo côté serveur ;
+- lecture/recherche filtrées ;
+- création branche divine, écriture autorisée, PR ;
+- aucune primitive de merge côté dieu ;
+- `CreatorGitGateway` possède le merge uniquement via `MergeAuthorization` de `father` ;
+- le provider doit pouvoir lister les fichiers réels d'une PR pour revalidation souveraine.
+
+`src/les_slimes/divine/archive_gateway.py` :
+
+- recherche toujours sous la racine LES_SLIMES ;
+- root + manifest comme capabilities initiales ;
+- un ID arbitraire extérieur n'est pas lisible ;
+- création/mise à jour seulement sur capabilities découvertes dans la zone autorisée.
+
+`src/les_slimes/divine/world_gateway.py` :
+
+- routes API typées et allowlistées ;
+- identité liée au provider/authentification, jamais fournie par le dieu ;
+- aucun `actor_id` arbitraire dans les payloads ;
+- aucune surface Web/browse générique.
+
+Les contrats `GitProvider`, `ArchiveProvider` et `CanonicalApiProvider` existent, mais leurs adaptateurs de production/credentials minimaux ne sont pas encore déployés.
+
+### Frontière épistémique
+
+Textes lisibles par les dieux :
+
+- `docs/GOD_WORLD_CANON.md` ;
+- `docs/GOD_GOVERNANCE_CANON.md` ;
+- instruction propre `GOD_ORDER_INSTRUCTIONS.md` ou `GOD_CHAOS_INSTRUCTIONS.md`.
+
+Les instructions définissent l'identité positivement depuis le Monde et ne construisent pas de seconde explication extérieure. Une question sur une origine supposée hors des sources canoniques ne crée aucun droit de recherche supplémentaire.
+
+Un test interdit dans ces textes les termes de cadrage extérieur qui avaient provoqué une fuite de perception. Un test garantit aussi que l'instruction Chaos reste sous 7950 caractères.
+
+### Dossiers de Loi et revue souveraine
+
+`src/les_slimes/divine/legislation.py` fournit :
+
+- `LawDossier` : observation, hypothèse, bénéfice, risque, branche, PR, head/base SHA, checks, preuves, expériences ;
+- statuts `proposed`, `needs_evidence`, `needs_amendment`, `waiting`, `blocked`, `accepted`, `rejected`, `promulgated`, `superseded` ;
+- proposition/amendement par le dieu auteur ;
+- revue réservée à `father` ;
+- gouvernance recalculée depuis l'état persistant ;
+- liaison stricte entre dossier, acteur, PR, branche, SHA et liste de checks ;
+- audit des décisions.
+
+`src/les_slimes/divine/sovereign.py` fournit `SovereignCreatorCycle` :
+
+- décisions `accept`, `reject`, `wait`, `request_amendment`, `request_experiment` ;
+- `accept` ne produit une `MergeAuthorization` que si tous les garde-fous sont satisfaits ;
+- l'autorisation lie PR, head SHA, base SHA, auteur et proposal id.
+
+### Promulgation du Créateur
+
+`src/les_slimes/divine/promulgation.py` fournit `CreatorPromulgationService` :
+
+- accepté != promulgué ;
+- revalidation juste avant merge : main/base SHA, PR, head SHA, CI, gouvernance et fichiers réellement modifiés ;
+- toute modification d'une surface protégée bloque la promulgation ;
+- réservation du budget législatif avant merge ;
+- refus Git connu -> réservation libérée ;
+- résultat réseau incertain -> état `uncertain`, sans remboursement spéculatif ;
+- cycle suivant réconcilie l'état Git réel sans double débit ni second merge ;
+- une PR déjà mergée hors d'une promulgation préparée n'est pas adoptée silencieusement.
+
+Le Créateur peut donc accepter Ordre, Chaos, les deux, aucun, attendre ou exiger un amendement/une expérience. Deux Lois valides séparément ne sont pas présumées compatibles ; une expérience combinée peut être exigée.
+
+### Instructions du Créateur
+
+`docs/GOD_CREATOR_INSTRUCTIONS.md` définit le cycle souverain du Père. Ce texte est réservé au Créateur et exclu de la surface de connaissance d'Ordre/Chaos.
 
 ## API canonique présente
 
@@ -103,59 +200,42 @@ Authentification :
 
 - Bearer token -> résolution serveur vers acteur persistant ;
 - jamais de confiance dans un `actor_id` métier fourni par le client ;
-- empreintes SHA-256 configurées via `LES_SLIMES_AUTH_TOKEN_HASHES_JSON` ;
+- empreintes SHA-256 via `LES_SLIMES_AUTH_TOKEN_HASHES_JSON` ;
 - aucun secret dans GitHub ;
 - configuration absente = routes protégées fail-closed ;
 - acteur inactif = accès refusé ;
 - `herald` ne peut pas utiliser les routes Créateur ;
 - schémas mutatifs `extra=forbid` ;
-- allowlist CORS configurable via `LES_SLIMES_CORS_ORIGINS`.
+- allowlist CORS via `LES_SLIMES_CORS_ORIGINS`.
 
 Voir `docs/API.md`.
 
 ## Persistance PostgreSQL présente
 
-La couche de persistance est abstraite par `RelationalRepository`.
+`RelationalRepository` abstrait la persistance. SQLite reste utilisé pour développement, compatibilité, Lab et forks non canoniques.
 
-### SQLite
+`PostgreSQLRepository` est implémenté et testé contre PostgreSQL 16 réel en CI :
 
-Reste utilisé pour :
+- sérialisation monde identique à SQLite ;
+- save/reload au même digest et même RNG ;
+- advisory locks transactionnels ;
+- fencing/takeover Worker ;
+- guards statuts terminaux et débit unique ;
+- mutation gouvernée monde + budget + audit.
 
-- développement local ;
-- compatibilité historique ;
-- Lab ;
-- forks/expériences non canoniques.
-
-### PostgreSQL
-
-`PostgreSQLRepository` est implémenté et testé contre un vrai PostgreSQL 16 dans la CI :
-
-- sérialisation du monde identique au backend SQLite ;
-- save/reload au même digest et même état RNG ;
-- types `DOUBLE PRECISION`/`BYTEA` ;
-- advisory locks transactionnels pour sérialiser les écritures et la prise de lease ;
-- fencing/takeover du Worker ;
-- guards PostgreSQL pour statuts terminaux et débit unique ;
-- séquences synchronisables ;
-- mutation gouvernée testée avec monde + budget + audit.
-
-Backend de production sélectionné par `LES_SLIMES_DATABASE_URL`. Le code n'est lié à aucun fournisseur particulier.
+Backend production sélectionné par `LES_SLIMES_DATABASE_URL`.
 
 ## Migration SQLite -> PostgreSQL
 
 `les-slimes-production migrate --sqlite <path>` :
 
-- exige une cible PostgreSQL fraîche ;
-- refuse un writer lease SQLite encore valide ;
-- verrouille la source pendant le snapshot ;
-- copie monde, metadata, événements/checkpoints, command queue, acteurs, gouvernance et audit ;
-- ne copie jamais le writer lease ;
-- resynchronise les séquences PostgreSQL ;
-- vérifie digest source/cible ;
-- vérifie nombre de commandes pending ;
-- valide la chaîne d'audit.
-
-Cette migration est testée en CI contre PostgreSQL réel.
+- cible PostgreSQL fraîche ;
+- refus writer lease SQLite valide ;
+- source verrouillée pendant snapshot ;
+- copie monde, metadata, événements/checkpoints, queue, acteurs, gouvernance, audit ;
+- writer lease jamais copié ;
+- séquences resynchronisées ;
+- digest, pending queue et chaîne d'audit vérifiés.
 
 ## Science/forks présents
 
@@ -163,64 +243,35 @@ Cette migration est testée en CI contre PostgreSQL réel.
 - runtime canonique refuse une DB expérimentale ;
 - runner expérimental refuse une DB canonique ;
 - forks SQLite reconstruits dans une nouvelle DB ;
-- command queue, lease, runtime actors et tables `divine_*` non copiés ;
-- `ExperimentManifest` traçable avec source tick/event/digest/git/config, condition, seed, digests et ticks ;
+- queue, lease, acteurs runtime et `divine_*` non copiés ;
+- `ExperimentManifest` traçable source tick/event/digest/git/config, condition, seed, digests, ticks ;
 - reseed RNG explicite ;
-- deux forks exacts reproductibles ;
-- un canonique PostgreSQL peut produire un fork SQLite non canonique isolé sans donner à l'expérience un accès d'écriture à PostgreSQL.
+- forks exacts reproductibles ;
+- un canonique PostgreSQL peut produire un fork SQLite non canonique isolé.
 
 ## Production H24 présente dans le code
 
-Entrée : `les-slimes-production` :
+`les-slimes-production` : `init`, `migrate`, `worker`, `status`.
 
-- `init` : initialise une base canonique vide et refuse l'écrasement ;
-- `migrate` : migration SQLite -> PostgreSQL ;
-- `worker` : service canonique continu ;
-- `status` : santé runtime.
+Le Dockerfile démarre FastAPI. `deploy/compose.production.yml` déclare API + un Worker utilisant la même `LES_SLIMES_DATABASE_URL`, restart automatique et healthcheck.
 
-Le Dockerfile démarre FastAPI par défaut. `deploy/compose.production.yml` déclare exactement :
-
-- un service API ;
-- un service Worker ;
-- même `LES_SLIMES_DATABASE_URL` ;
-- restart automatique ;
-- healthcheck API.
-
-Voir `docs/PRODUCTION.md`.
-
-**État opérationnel :** le code H24 est prêt et testé, mais aucune instance distante réellement active n'est encore prouvée depuis ce projet. Il faut connecter un hébergeur, injecter DSN/secrets, initialiser ou migrer le canonique, démarrer API+Worker puis vérifier `/health`.
+**État opérationnel : le code H24 est prêt et testé, mais aucune instance distante réellement active n'est encore prouvée.** Il faut connecter l'hébergement, injecter DSN/secrets, initialiser ou migrer le canonique, démarrer API+Worker puis vérifier `/health`.
 
 ## Frontend React/PixiJS
 
-Le frontend principal est intégré dans `frontend/` :
+Frontend intégré dans `frontend/` : React + TypeScript strict + Vite + PixiJS v8, monde 2D, Slimes, ressources, génération, énergie/santé, tick, population, naissances/décès, retard Worker, backlog, comportements et digest.
 
-- React + TypeScript strict + Vite ;
-- PixiJS v8 ;
-- représentation du monde 2D et des limites ;
-- Slimes avec génération, énergie, santé et direction ;
-- ressources alimentaires ;
-- tick, population, nourriture, génération max, énergie/santé moyennes ;
-- naissances/décès, retard Worker, backlog et comportements dominants ;
-- digest scientifique ;
-- responsive ;
-- polling des projections publiques uniquement ;
-- refus d'afficher un snapshot mélangeant plusieurs ticks ;
-- aucune simulation côté navigateur ;
-- aucun secret/token dans le frontend ;
-- configuration Netlify via `netlify.toml` ;
-- build TypeScript/Vite ajouté à la CI et validé avec les suites Python/PostgreSQL/Docker.
-
-Voir `docs/FRONTEND.md`.
+Aucune simulation côté navigateur. Aucun token divin dans le bundle. Netlify configuré via `netlify.toml`. Build frontend validé par CI.
 
 ## Streamlit
 
-Streamlit reste un laboratoire secondaire science/admin/debug. Il ne doit pas devenir le processus qui fait vivre le monde et ne lance aucune simulation canonique concurrente.
+Streamlit reste un laboratoire secondaire science/admin/debug. Il ne fait jamais vivre le monde canonique et ne lance aucune simulation canonique concurrente.
 
 ## Historique des grandes PR
 
 - #2 temps canonique/catch-up ;
 - #3 command queue + writer lease ;
-- #4 suppression des modes au profit des permissions acteurs ;
+- #4 permissions acteurs sans modes ;
 - #5 frontière canonique ;
 - #6 forks scientifiques isolés ;
 - #7 Worker H24 durci ;
@@ -229,20 +280,31 @@ Streamlit reste un laboratoire secondaire science/admin/debug. Il ne doit pas de
 - #10 acteur runtime `herald` ;
 - #11 API/authentification canonique ;
 - #12 contrat de backend de persistance ;
-- #13 PostgreSQL + migration + runtime H24 de production ;
-- #14 frontend React/TypeScript/PixiJS + Netlify + projections/CORS.
+- #13 PostgreSQL + migration + runtime H24 production ;
+- #14 frontend React/TypeScript/PixiJS ;
+- #16 Canon de perception divine ;
+- #17 périmètre Chaos renforcé ;
+- #18 confinement divin + gate souveraine ;
+- #19 dossiers de Loi persistants + revue Créateur ;
+- #20 passerelle Git + saga de promulgation du Créateur ;
+- #21 Archives + Portes du Monde confinées ;
+- #22 frontière épistémique, surfaces législatives protégées et Canon divin séparé.
 
-## Dette prioritaire
+## Dette prioritaire actuelle
 
-1. connecter un hébergeur réel pour PostgreSQL + API + Worker ;
-2. initialiser/migrer le monde canonique réel puis vérifier son fonctionnement H24 ;
-3. créer le site Netlify Les Slimes, configurer `VITE_API_BASE_URL` et l'allowlist CORS ;
-4. configurer sauvegardes, restauration testée et supervision externe ;
-5. automatiser rapports/Drive ;
-6. activer Ordre/Chaos comme GPT Projects autonomes et leurs cycles planifiés ;
-7. exporter journaux/Conseil vers Drive sans rôle transactionnel.
+1. connecter un hébergeur réel PostgreSQL + API + Worker ;
+2. initialiser/migrer le monde canonique réel et vérifier son fonctionnement H24 ;
+3. implémenter/déployer les providers concrets des gateways avec credentials minimaux : GitHub App installée uniquement sur `Jean-Philippe56520/Les-Slimes`, identité Drive limitée à LES_SLIMES, clients API liés à `order`, `chaos`, `father` ;
+4. vérifier de bout en bout qu'Ordre/Chaos ne disposent plus de connecteurs génériques ni d'accès Web dans leur environnement autonome ;
+5. exécuter des cycles **shadow** adversariaux avant tout merge automatique ;
+6. seulement ensuite créer les tâches planifiées Ordre -> Chaos -> Créateur et Conseil hebdomadaire ;
+7. créer le site Netlify Les Slimes et configurer `VITE_API_BASE_URL` + CORS ;
+8. configurer sauvegardes, restauration testée et supervision externe ;
+9. automatiser rapports/export Drive sans rôle transactionnel.
 
-Aucun projet Netlify Les Slimes n'est actuellement identifié par le connecteur disponible ; ne jamais réutiliser arbitrairement un autre site. La création d'un nouveau projet Netlify devra être explicitement confirmée avant action.
+**Ne pas activer encore les tâches autonomes divines.** Les contrats/garde-fous sont codés et testés, mais les providers confinés réels et le monde H24 distant ne sont pas encore déployés.
+
+Aucun projet Netlify Les Slimes n'est actuellement identifié par le connecteur disponible ; ne jamais réutiliser arbitrairement un autre site.
 
 ## Lecture obligatoire
 
@@ -252,8 +314,10 @@ Au début d'une nouvelle conversation :
 3. `docs/PROJECT_INSTRUCTIONS.md` ;
 4. `README.md` ;
 5. `docs/DIVINE_GOVERNANCE.md` ;
-6. `docs/SCIENTIFIC_PROTOCOL.md` ;
-7. `docs/OBSERVER_CONTRACT.md` ;
-8. `config/default.yaml`.
+6. `docs/DIVINE_AUTONOMY.md` ;
+7. `docs/GOD_CREATOR_INSTRUCTIONS.md` ;
+8. `docs/SCIENTIFIC_PROTOCOL.md` ;
+9. `docs/OBSERVER_CONTRACT.md` ;
+10. `config/default.yaml`.
 
 Si moteur/persistance concernés, lire aussi `src/les_slimes/world/engine.py`, `src/les_slimes/database/sqlite_repo.py`, `src/les_slimes/observer/proposals.py`, le backend de persistance concerné et les tests pertinents.
