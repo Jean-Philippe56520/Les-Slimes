@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import sys
+import threading
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,7 +14,13 @@ from .config import WorldConfig
 from .database.sqlite_repo import SQLiteRepository
 from .experiments import create_experiment_fork, run_experiment_fork
 from .observer import ObserverProposal, proposal_to_command
-from .runtime import CanonicalRuntime, CanonicalWorldWorker, RuntimeStorage
+from .runtime import (
+    CanonicalRuntime,
+    CanonicalWorkerService,
+    CanonicalWorldWorker,
+    RuntimeStorage,
+    WorkerServiceConfig,
+)
 from .world.engine import World
 
 
@@ -32,6 +40,30 @@ def _metrics_dict(world: World) -> dict[str, int | float | str]:
         "mean_health": round(m.mean_health, 4),
         "max_generation": m.max_generation,
         "digest": world.state_digest(),
+    }
+
+
+def _health_dict(health) -> dict:
+    return {
+        "holder_id": health.holder_id,
+        "lease_generation": health.lease_generation,
+        "lease_expires_at_utc": (
+            health.lease_expires_at_utc.isoformat()
+            if health.lease_expires_at_utc is not None
+            else None
+        ),
+        "lease_valid": health.lease_valid,
+        "world_tick": health.world_tick,
+        "last_simulated_at_utc": health.last_simulated_at_utc.isoformat(),
+        "wall_clock_utc": health.wall_clock_utc.isoformat(),
+        "lag_seconds": round(health.lag_seconds, 6),
+        "ticks_due": health.ticks_due,
+        "pending_commands": health.pending_commands,
+        "oldest_pending_command_utc": (
+            health.oldest_pending_command_utc.isoformat()
+            if health.oldest_pending_command_utc is not None
+            else None
+        ),
     }
 
 
@@ -109,6 +141,44 @@ def cmd_simulate(args: argparse.Namespace) -> int:
             indent=2,
         )
     )
+    return 0
+
+
+def _worker_service(args: argparse.Namespace) -> CanonicalWorkerService:
+    return CanonicalWorkerService(
+        SQLiteRepository(args.db),
+        holder_id=getattr(args, "holder_id", None),
+        config=WorkerServiceConfig(
+            poll_interval_seconds=args.poll_interval,
+            lease_ttl_seconds=args.lease_ttl,
+            heartbeat_interval_seconds=args.heartbeat_interval,
+            batch_size=args.batch_size,
+            command_page_size=args.command_page_size,
+        ),
+    )
+
+
+def cmd_worker_run(args: argparse.Namespace) -> int:
+    service = _worker_service(args)
+    stop = threading.Event()
+
+    def request_stop(signum, frame) -> None:
+        del signum, frame
+        stop.set()
+
+    previous_sigint = signal.signal(signal.SIGINT, request_stop)
+    previous_sigterm = signal.signal(signal.SIGTERM, request_stop)
+    try:
+        service.serve(stop_requested=stop.is_set)
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint)
+        signal.signal(signal.SIGTERM, previous_sigterm)
+    return 0
+
+
+def cmd_worker_status(args: argparse.Namespace) -> int:
+    service = _worker_service(args)
+    print(json.dumps(_health_dict(service.health()), indent=2))
     return 0
 
 
@@ -238,6 +308,16 @@ def cmd_experiment_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_worker_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--db", default="data/world.sqlite")
+    parser.add_argument("--holder-id")
+    parser.add_argument("--poll-interval", type=float, default=1.0)
+    parser.add_argument("--lease-ttl", type=float, default=30.0)
+    parser.add_argument("--heartbeat-interval", type=float, default=10.0)
+    parser.add_argument("--batch-size", type=int, default=1000)
+    parser.add_argument("--command-page-size", type=int, default=1000)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="les-slimes")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -254,6 +334,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_sim.add_argument("--checkpoint", type=int, default=0)
     p_sim.add_argument("--holder-id", default="cli-worker")
     p_sim.set_defaults(func=cmd_simulate)
+
+    p_worker = sub.add_parser("worker-run", help="Run the canonical world worker continuously")
+    _add_worker_options(p_worker)
+    p_worker.set_defaults(func=cmd_worker_run)
+
+    p_worker_status = sub.add_parser("worker-status", help="Show canonical worker health")
+    _add_worker_options(p_worker_status)
+    p_worker_status.set_defaults(func=cmd_worker_status)
 
     p_status = sub.add_parser("status", help="Show current world state")
     p_status.add_argument("--db", default="data/world.sqlite")
