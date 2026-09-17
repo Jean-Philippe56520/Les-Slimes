@@ -31,18 +31,6 @@ export interface SlimeCollection {
   slimes: SlimeProjection[];
 }
 
-export interface FoodProjection {
-  id: number;
-  x: number;
-  y: number;
-  nutrition: number;
-}
-
-export interface FoodCollection {
-  tick: number;
-  foods: FoodProjection[];
-}
-
 export interface WriterLeaseHealth {
   valid: boolean;
   holder_id: string | null;
@@ -65,7 +53,6 @@ export interface RuntimeHealth {
 export interface CanonicalSnapshot {
   world: WorldSummary;
   slimes: SlimeCollection;
-  foods: FoodCollection;
   health: RuntimeHealth;
   receivedAt: number;
 }
