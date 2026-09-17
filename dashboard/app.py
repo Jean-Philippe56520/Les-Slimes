@@ -16,7 +16,7 @@ if str(SRC) not in sys.path:
 
 from les_slimes.analytics import build_world_report
 from les_slimes.database.sqlite_repo import SQLiteRepository
-from les_slimes.governance import GovernanceAdminService
+from les_slimes.governance.service import GovernanceAdminService
 from les_slimes.observer import ObserverProposal, proposal_to_command
 from les_slimes.runtime import RuntimeStorage
 from les_slimes.world.engine import World
