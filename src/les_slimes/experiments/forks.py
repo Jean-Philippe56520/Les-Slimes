@@ -29,8 +29,10 @@ class ExperimentManifest:
     canonical: bool
     persistence_scope: str
     source_tick: int
+    source_event_sequence: int
     source_digest: str
     source_git_commit: str
+    source_config: dict
     created_at_utc: str
     condition: str
     experiment_seed: int | None
@@ -108,7 +110,9 @@ def create_experiment_fork(
         require_persistence_scope(snapshot_repo, PersistenceScope.CANONICAL)
         source_world = snapshot_repo.load_world()
         source_tick = source_world.tick
+        source_event_sequence = source_world.event_sequence
         source_digest = source_world.state_digest()
+        source_config = source_world.config.to_dict()
 
     experiment_repo = SQLiteRepository(destination_path)
     set_persistence_scope(experiment_repo, PersistenceScope.NON_CANONICAL_EXPERIMENT)
@@ -124,8 +128,10 @@ def create_experiment_fork(
         canonical=False,
         persistence_scope=PersistenceScope.NON_CANONICAL_EXPERIMENT.value,
         source_tick=source_tick,
+        source_event_sequence=source_event_sequence,
         source_digest=source_digest,
         source_git_commit=source_git_commit,
+        source_config=source_config,
         created_at_utc=datetime.now(UTC).isoformat(),
         condition=condition,
         experiment_seed=experiment_seed,
