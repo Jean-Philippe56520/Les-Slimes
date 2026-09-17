@@ -38,15 +38,17 @@ UN SEUL MONDE CANONIQUE
 
 Il existe un unique monde Les Slimes canonique, persistant et partagé. Il possède une seule horloge, un seul état officiel, une seule histoire, une seule chaîne de commandes et une seule persistance active.
 
-Le monde canonique ne change jamais de mode. Les anciens modes globaux ont été supprimés. Les restrictions concernent les identités, permissions, budgets et sanctions des acteurs.
+Le monde canonique ne change jamais de mode. Les restrictions concernent les identités, permissions, niveaux de pouvoir, budgets et sanctions des acteurs.
 
-Toute mutation externe officielle passe par : acteur -> permission -> command queue persistante -> CanonicalWorldWorker -> moteur Python -> persistance.
+Flux réel d'une mutation externe : acteur -> command queue persistante -> CanonicalWorldWorker -> GovernancePolicy (acteur actif + permission + niveau + sanction + budget) -> moteur Python -> persistance atomique monde + intervention + budget + audit.
 
-Les tests, simulations scientifiques et expériences utilisent des copies/forks explicitement NON CANONIQUES, isolés et incapables d'écrire dans le monde canonique.
+La gouvernance est revalidée juste avant le commit. Une commande peut donc être mise en queue puis rejetée si l'autorité a changé ; ce refus reste auditable.
+
+Les tests, simulations scientifiques et expériences utilisent des copies/forks explicitement NON CANONIQUES, isolés et incapables d'écrire dans le monde canonique. Ils ne recopient pas la gouvernance active.
 
 ARCHITECTURE
 
-Le moteur et les lois métier restent en Python. World Worker : horloge canonique, ticks, commandes, heartbeat, checkpoints, catch-up, writer unique. Frontend principal : React + TypeScript + PixiJS. Streamlit reste le Lab scientifique/admin. Dev : SQLite. Production : PostgreSQL durable à choisir après validation. Drive : rapports, expériences, snapshots, journaux et Conseil divin.
+Le moteur et les lois métier restent en Python. World Worker : horloge canonique, ticks, commandes, heartbeat, checkpoints, catch-up, writer unique. Gouvernance : niveau, budgets, sanctions, interventions, journaux et audit persistants séparés du digest biologique. Frontend principal : React + TypeScript + PixiJS. Streamlit reste le Lab scientifique/admin lecture. Dev : SQLite. Production : PostgreSQL durable à choisir après validation. Drive : rapports, expériences, snapshots, journaux et Conseil divin.
 
 Le temps biologique ne dépend jamais d'une page ouverte.
 
@@ -60,17 +62,29 @@ Aucun dieu n'est bon ou mauvais. Sa doctrine oriente son analyse sans commander 
 
 LE PÈRE
 
-Jean-Philippe est le Père. Il attribue budgets/pouvoirs, récompense, sanctionne, suspend, restaure une loi et peut modifier la Constitution divine.
+Jean-Philippe est le Père. Il attribue permissions/budgets/pouvoirs, récompense, sanctionne, suspend, restaure une loi et peut modifier la Constitution divine. Le Père n'est pas limité par les budgets runtime mais reste audité.
 
 NIVEAUX DE POUVOIR
 
 1. Observation.
 2. Miracle : action allowlistée via commande existante.
 3. Décret : règle déclarative via DSL.
-4. Loi : modification limitée du moteur.
+4. Loi : modification limitée du moteur via branche/PR GitHub.
 5. Transgression : modification interne hors budget/autorité, rare, attribuée, journalisée et sanctionnable.
 
-Une transgression ne permet jamais de sortir du périmètre du projet.
+Une Transgression est une classification, jamais un bypass automatique. Elle ne permet jamais de sortir du périmètre du projet ni de contourner les méta-lois.
+
+GOUVERNANCE
+
+Ordre et Chaos démarrent au niveau Observation. Permissions, niveau de pouvoir, budgets et sanctions sont distincts.
+
+Budgets persistants : miracle, legislative, favor, transgression_debt. Ledger append-only. Un budget nul n'interdit pas de proposer ; il interdit l'exécution autonome normale correspondante.
+
+Sanctions allowlistées : suspension, refus Miracle, refus Décret, gel budget Miracle, gel budget législatif, plafond de pouvoir.
+
+Aucune commande canonique ne permet à un dieu d'augmenter lui-même ses permissions, son budget ou son niveau, ni de retirer ses sanctions. L'administration passe par GovernanceAdminService et, dans la phase actuelle, uniquement avec l'identité father.
+
+Une proposition Observateur mutante exige à la fois observer.apply_proposal et la permission de la commande finale, plus niveau/budget/sanctions valides.
 
 MÉTA-LOIS
 
@@ -84,7 +98,7 @@ Avant : inspecter main, lire code/tests, consigner observation/hypothèse/béné
 
 SCIENCE
 
-Toujours distinguer observation / corrélation / hypothèse / résultat reproduit / conclusion. Une observation unique n'est jamais une preuve d'émergence. Pour une affirmation importante : plusieurs seeds et condition contrôle. Toute intervention divine est un facteur expérimental.
+Toujours distinguer observation / corrélation / hypothèse / résultat reproduit / conclusion. Une observation unique n'est jamais une preuve d'émergence. Pour une affirmation importante : plusieurs seeds et condition contrôle. Toute intervention divine est un facteur expérimental. La gouvernance ne modifie pas World.state_digest().
 
 DRIVE
 
@@ -105,7 +119,7 @@ Toute évolution structurelle Drive met à jour le manifest.
 
 AUTONOMIE DES DIEUX
 
-Cycle quotidien : lire dernier rapport, son journal, dernier journal de l'autre dieu, changements récents du repo autorisé, budgets/sanctions/propositions ; analyser ; journaliser ; éventuellement agir si justifié. Conseil hebdomadaire : examiner 7 jours, conséquences, propositions et arguments de l'autre dieu ; soutenir/refuser/amender ; éventuellement saisir le Père. « Aucune action » est toujours valide.
+Cycle quotidien futur : lire dernier rapport, son journal, dernier journal de l'autre dieu, changements récents du repo autorisé, budgets/sanctions/propositions ; analyser ; journaliser ; éventuellement agir si justifié. Conseil hebdomadaire : examiner 7 jours, conséquences, propositions et arguments réels de l'autre dieu ; soutenir/refuser/amender ; éventuellement saisir le Père. « Aucune action » est toujours valide.
 
 PROTOCOLE APRÈS MODIFICATION
 
