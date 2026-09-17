@@ -3,12 +3,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .analytics import build_world_report
 from .config import WorldConfig
 from .database.sqlite_repo import SQLiteRepository
-from .observer import ObserverProposal, apply_proposal
+from .observer import ObserverProposal, proposal_to_command
+from .runtime import CanonicalRuntime, CanonicalWorldWorker, RuntimeStorage
 from .world.engine import World
 
 
@@ -31,6 +34,37 @@ def _metrics_dict(world: World) -> dict[str, int | float | str]:
     }
 
 
+def _idempotency(prefix: str, value: str | None) -> str:
+    return value or f"cli:{prefix}:{uuid.uuid4().hex}"
+
+
+def _enqueue(
+    repo: SQLiteRepository,
+    *,
+    actor_id: str,
+    command_type: str,
+    payload: dict,
+    idempotency_key: str,
+    source_proposal_id: int | None = None,
+) -> dict:
+    command = RuntimeStorage(repo).enqueue_command(
+        actor_id=actor_id,
+        command_type=command_type,
+        payload=payload,
+        idempotency_key=idempotency_key,
+        created_at_utc=datetime.now(UTC),
+        source_proposal_id=source_proposal_id,
+    )
+    return {
+        "command_id": command.id,
+        "sequence": command.sequence,
+        "status": command.status,
+        "actor_id": command.actor_id,
+        "command_type": command.command_type,
+        "source_proposal_id": command.source_proposal_id,
+    }
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     db = Path(args.db)
     if db.exists() and not args.force:
@@ -45,21 +79,35 @@ def cmd_init(args: argparse.Namespace) -> int:
     world = World(config)
     repo = SQLiteRepository(db)
     repo.save_world(world)
+    RuntimeStorage(repo)
+    CanonicalRuntime(repo).ensure_initialized(datetime.now(UTC))
     print(json.dumps(_metrics_dict(world), indent=2))
     return 0
 
 
 def cmd_simulate(args: argparse.Namespace) -> int:
     repo = SQLiteRepository(args.db)
+    runtime = CanonicalRuntime(repo, batch_size=args.checkpoint or 1000)
+    metadata = runtime.ensure_initialized(datetime.now(UTC))
     world = repo.load_world()
-    remaining = args.ticks
-    checkpoint = args.checkpoint or world.config.checkpoint_interval
-    while remaining > 0:
-        batch = min(checkpoint, remaining)
-        world.step(batch)
-        repo.save_world(world)
-        remaining -= batch
-    print(json.dumps(_metrics_dict(world), indent=2))
+    target = metadata.last_simulated_at_utc + timedelta(
+        seconds=world.config.tick_duration_seconds * args.ticks
+    )
+    result = CanonicalWorldWorker(
+        repo,
+        holder_id=args.holder_id,
+        batch_size=args.checkpoint or 1000,
+    ).run_until(target)
+    print(
+        json.dumps(
+            {
+                "commands_applied": result.commands_applied,
+                "commands_rejected": result.commands_rejected,
+                **_metrics_dict(repo.load_world()),
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -82,26 +130,30 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 def cmd_deposit_food(args: argparse.Namespace) -> int:
     repo = SQLiteRepository(args.db)
-    world = repo.load_world()
-    ids = world.player_deposit_food(args.x, args.y, args.count)
-    repo.save_world(world)
-    print(json.dumps({"food_ids": ids, **_metrics_dict(world)}, indent=2))
+    result = _enqueue(
+        repo,
+        actor_id=args.actor,
+        command_type="deposit_food",
+        payload={"x": args.x, "y": args.y, "count": args.count},
+        idempotency_key=_idempotency("deposit-food", args.idempotency_key),
+    )
+    print(json.dumps(result, indent=2))
     return 0
 
 
 def cmd_signal(args: argparse.Namespace) -> int:
     repo = SQLiteRepository(args.db)
-    world = repo.load_world()
-    receivers = world.player_emit_signal(
-        args.signal, args.x, args.y, radius=args.radius
+    payload = {"signal": args.signal, "x": args.x, "y": args.y}
+    if args.radius is not None:
+        payload["radius"] = args.radius
+    result = _enqueue(
+        repo,
+        actor_id=args.actor,
+        command_type="emit_signal",
+        payload=payload,
+        idempotency_key=_idempotency("signal", args.idempotency_key),
     )
-    repo.save_world(world)
-    print(
-        json.dumps(
-            {"signal": args.signal, "receivers": receivers, **_metrics_dict(world)},
-            indent=2,
-        )
-    )
+    print(json.dumps(result, indent=2))
     return 0
 
 
@@ -133,15 +185,32 @@ def cmd_proposal_list(args: argparse.Namespace) -> int:
 
 def cmd_proposal_apply(args: argparse.Namespace) -> int:
     repo = SQLiteRepository(args.db)
-    world = repo.load_world()
     row = repo.get_observer_proposal(args.id)
     proposal = ObserverProposal.from_dict(json.loads(row["proposal_json"]))
-    result = apply_proposal(world, proposal)
-    if result.get("applied"):
-        repo.save_world(world)
-        repo.update_observer_proposal(args.id, status="applied", result=result)
-    else:
+    converted = proposal_to_command(proposal)
+    if converted is None:
+        result = {
+            "queued": False,
+            "reason": "Analytical proposals do not mutate the world",
+        }
         repo.update_observer_proposal(args.id, status="reviewed", result=result)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+
+    command_type, payload = converted
+    result = _enqueue(
+        repo,
+        actor_id=args.actor,
+        command_type=command_type,
+        payload=payload,
+        idempotency_key=_idempotency(f"proposal-{args.id}", args.idempotency_key),
+        source_proposal_id=args.id,
+    )
+    repo.update_observer_proposal(
+        args.id,
+        status="queued",
+        result={"command_id": result["command_id"], "approved_by": args.actor},
+    )
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
 
@@ -156,10 +225,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--force", action="store_true")
     p_init.set_defaults(func=cmd_init)
 
-    p_sim = sub.add_parser("simulate", help="Advance a saved world")
+    p_sim = sub.add_parser("simulate", help="Advance the canonical world through the worker")
     p_sim.add_argument("--db", default="data/world.sqlite")
     p_sim.add_argument("--ticks", type=int, required=True)
     p_sim.add_argument("--checkpoint", type=int, default=0)
+    p_sim.add_argument("--holder-id", default="cli-worker")
     p_sim.set_defaults(func=cmd_simulate)
 
     p_status = sub.add_parser("status", help="Show current world state")
@@ -171,24 +241,26 @@ def build_parser() -> argparse.ArgumentParser:
     p_report.add_argument("--output")
     p_report.set_defaults(func=cmd_report)
 
-    p_food = sub.add_parser("deposit-food", help="Deposit food as the human player")
+    p_food = sub.add_parser("deposit-food", help="Queue a food deposit")
     p_food.add_argument("--db", default="data/world.sqlite")
+    p_food.add_argument("--actor", default="father")
+    p_food.add_argument("--idempotency-key")
     p_food.add_argument("--x", type=float, required=True)
     p_food.add_argument("--y", type=float, required=True)
     p_food.add_argument("--count", type=int, default=1)
     p_food.set_defaults(func=cmd_deposit_food)
 
-    p_signal = sub.add_parser("signal", help="Emit a learnable player signal")
+    p_signal = sub.add_parser("signal", help="Queue a learnable signal")
     p_signal.add_argument("--db", default="data/world.sqlite")
+    p_signal.add_argument("--actor", default="father")
+    p_signal.add_argument("--idempotency-key")
     p_signal.add_argument("--signal", choices=World.SIGNALS, required=True)
     p_signal.add_argument("--x", type=float, required=True)
     p_signal.add_argument("--y", type=float, required=True)
     p_signal.add_argument("--radius", type=float)
     p_signal.set_defaults(func=cmd_signal)
 
-    p_prop_import = sub.add_parser(
-        "proposal-import", help="Import a validated Observer proposal JSON"
-    )
+    p_prop_import = sub.add_parser("proposal-import", help="Import an Observer proposal JSON")
     p_prop_import.add_argument("--db", default="data/world.sqlite")
     p_prop_import.add_argument("--file", required=True)
     p_prop_import.set_defaults(func=cmd_proposal_import)
@@ -199,11 +271,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_prop_list.add_argument("--limit", type=int, default=100)
     p_prop_list.set_defaults(func=cmd_proposal_list)
 
-    p_prop_apply = sub.add_parser(
-        "proposal-apply", help="Apply a safe Observer proposal"
-    )
+    p_prop_apply = sub.add_parser("proposal-apply", help="Approve a proposal into the command queue")
     p_prop_apply.add_argument("--db", default="data/world.sqlite")
     p_prop_apply.add_argument("--id", type=int, required=True)
+    p_prop_apply.add_argument("--actor", default="father")
+    p_prop_apply.add_argument("--idempotency-key")
     p_prop_apply.set_defaults(func=cmd_proposal_apply)
 
     return parser
