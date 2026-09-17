@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from ..database.scope import ensure_canonical_scope
 from ..database.sqlite_repo import SQLiteRepository
 from ..world.engine import World
 
@@ -33,6 +34,7 @@ class CanonicalRuntime:
     def __init__(self, repository: SQLiteRepository, *, batch_size: int = 1000) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be >= 1")
+        ensure_canonical_scope(repository)
         self.repository = repository
         self.batch_size = batch_size
 
