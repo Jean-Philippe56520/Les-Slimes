@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
 from ..database.base import RelationalRepository
 from ..governance.invariants import ensure_governance_invariants
+from ..governance.models import BudgetKind, PowerLevel, SanctionType
 from ..governance.storage import GovernanceStorage
 from ..runtime.storage import RuntimeStorage
 from .access import DivineAccessPolicy
@@ -16,6 +17,7 @@ from .sovereign import CreatorDecision, CreatorReview, LawCandidate, SovereignCr
 
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+LAW_BUDGET_COST = 1
 
 
 class LegislativeStatus(StrEnum):
@@ -120,6 +122,28 @@ class DivineLegislationService:
         actor = self.runtime.get_actor(actor_id)
         if not actor.active:
             raise PermissionError("Inactive gods cannot submit or amend Laws")
+
+    def _law_governance_eligible(self, actor_id: str) -> bool:
+        actor = self.runtime.get_actor(actor_id)
+        if not actor.active:
+            return False
+        state = self.storage.get_actor_state(actor_id)
+        sanctions = self.storage.active_sanctions(actor_id, now_utc=self._now())
+        sanction_types = {sanction.sanction_type for sanction in sanctions}
+        if SanctionType.SUSPEND in sanction_types:
+            return False
+        if SanctionType.FREEZE_LEGISLATIVE_BUDGET in sanction_types:
+            return False
+        effective_power = state.max_power_level
+        for sanction in sanctions:
+            if sanction.sanction_type == SanctionType.MAX_POWER_LEVEL:
+                effective_power = min(
+                    effective_power,
+                    PowerLevel(int(sanction.parameters["power_level"])),
+                )
+        if effective_power < PowerLevel.LAW:
+            return False
+        return self.storage.budget_balance(actor_id, BudgetKind.LEGISLATIVE) >= LAW_BUDGET_COST
 
     def submit(self, actor_id: str, dossier: LawDossier) -> int:
         self._active_divine_actor(actor_id)
@@ -268,6 +292,10 @@ class DivineLegislationService:
         stored = self.get(proposal_id)
         if LegislativeStatus(stored["status"]) in _TERMINAL_STATUSES:
             raise PermissionError("Terminal Laws cannot be reviewed again")
+        candidate = replace(
+            candidate,
+            governance_eligible=self._law_governance_eligible(stored["actor_id"]),
+        )
         review = self.creator_cycle.review(candidate, decision=decision, reason=reason)
         mismatches = self._dossier_mismatches(stored, candidate)
         if mismatches:
