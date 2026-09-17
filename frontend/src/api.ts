@@ -1,5 +1,6 @@
 import type {
   CanonicalSnapshot,
+  FoodCollection,
   RuntimeHealth,
   SlimeCollection,
   WorldSummary,
@@ -27,10 +28,11 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 export async function fetchCanonicalSnapshot(signal?: AbortSignal): Promise<CanonicalSnapshot> {
-  const [world, slimes, health] = await Promise.all([
+  const [world, slimes, foods, health] = await Promise.all([
     getJson<WorldSummary>('/world', signal),
     getJson<SlimeCollection>('/world/slimes', signal),
+    getJson<FoodCollection>('/world/foods', signal),
     getJson<RuntimeHealth>('/health', signal),
   ]);
-  return { world, slimes, health, receivedAt: Date.now() };
+  return { world, slimes, foods, health, receivedAt: Date.now() };
 }
