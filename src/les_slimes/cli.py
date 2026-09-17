@@ -10,6 +10,7 @@ from pathlib import Path
 from .analytics import build_world_report
 from .config import WorldConfig
 from .database.sqlite_repo import SQLiteRepository
+from .experiments import create_experiment_fork, run_experiment_fork
 from .observer import ObserverProposal, proposal_to_command
 from .runtime import CanonicalRuntime, CanonicalWorldWorker, RuntimeStorage
 from .world.engine import World
@@ -215,6 +216,28 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_experiment_fork(args: argparse.Namespace) -> int:
+    source = SQLiteRepository(args.db)
+    _, manifest = create_experiment_fork(
+        source,
+        args.output,
+        experiment_id=args.experiment_id,
+        condition=args.condition,
+        source_git_commit=args.source_git_commit,
+        experiment_seed=args.experiment_seed,
+        run_id=args.run_id,
+    )
+    print(json.dumps(manifest.to_dict(), indent=2, ensure_ascii=False))
+    return 0
+
+
+def cmd_experiment_run(args: argparse.Namespace) -> int:
+    repo = SQLiteRepository(args.db)
+    manifest = run_experiment_fork(repo, ticks=args.ticks)
+    print(json.dumps(manifest.to_dict(), indent=2, ensure_ascii=False))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="les-slimes")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -277,6 +300,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_prop_apply.add_argument("--actor", default="father")
     p_prop_apply.add_argument("--idempotency-key")
     p_prop_apply.set_defaults(func=cmd_proposal_apply)
+
+    p_exp_fork = sub.add_parser(
+        "experiment-fork",
+        help="Create an isolated non-canonical fork from the canonical world",
+    )
+    p_exp_fork.add_argument("--db", default="data/world.sqlite")
+    p_exp_fork.add_argument("--output", required=True)
+    p_exp_fork.add_argument("--experiment-id", required=True)
+    p_exp_fork.add_argument("--condition", required=True)
+    p_exp_fork.add_argument("--source-git-commit", required=True)
+    p_exp_fork.add_argument("--experiment-seed", type=int)
+    p_exp_fork.add_argument("--run-id")
+    p_exp_fork.set_defaults(func=cmd_experiment_fork)
+
+    p_exp_run = sub.add_parser(
+        "experiment-run",
+        help="Advance an isolated non-canonical experiment fork",
+    )
+    p_exp_run.add_argument("--db", required=True)
+    p_exp_run.add_argument("--ticks", type=int, required=True)
+    p_exp_run.set_defaults(func=cmd_experiment_run)
 
     return parser
 
