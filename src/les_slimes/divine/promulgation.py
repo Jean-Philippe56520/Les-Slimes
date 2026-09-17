@@ -8,7 +8,7 @@ from ..database.base import RelationalRepository
 from ..governance.models import BudgetKind, PowerLevel, SanctionType
 from ..governance.storage import GovernanceStorage
 from ..runtime.storage import RuntimeStorage
-from .access import AUTHORIZED_REPOSITORY
+from .access import AUTHORIZED_REPOSITORY, DivineAccessPolicy
 from .git_gateway import CreatorGitGateway, GitProvider, PullRequestSnapshot
 from .legislation import LAW_BUDGET_COST, DivineLegislationService, LegislativeStatus
 from .sovereign import MergeAuthorization
@@ -116,6 +116,21 @@ class CreatorPromulgationService:
             blockers.append("main changed after Creator review")
         if snapshot.base_sha != authorization.expected_base_sha:
             blockers.append("pull request base SHA changed after Creator review")
+
+        policy = DivineAccessPolicy(authorization.candidate_actor_id)
+        try:
+            changed_files = self.git.pull_request_files(authorization.pr_number)
+        except Exception as exc:
+            blockers.append(f"cannot verify pull request file surface: {type(exc).__name__}")
+        else:
+            if not changed_files:
+                blockers.append("pull request changes no files")
+            for path in changed_files:
+                try:
+                    policy.assert_divine_write_path(path)
+                except PermissionError:
+                    blockers.append(f"protected file changed by divine Law: {path}")
+
         if not snapshot.merged:
             if snapshot.state != "open":
                 blockers.append("pull request is not open")
