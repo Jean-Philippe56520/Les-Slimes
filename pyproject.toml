@@ -31,6 +31,7 @@ dev = [
 
 [project.scripts]
 les-slimes = "les_slimes.cli:main"
+les-slimes-production = "les_slimes.production:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
