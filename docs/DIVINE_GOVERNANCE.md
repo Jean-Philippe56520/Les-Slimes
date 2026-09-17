@@ -15,7 +15,9 @@ Il possède une seule horloge, un seul état officiel, une seule histoire, une s
 
 Le monde canonique ne change jamais de mode.
 
-Toute mutation externe officielle passe par : acteur -> permission technique -> gouvernance -> command queue persistante -> `CanonicalWorldWorker` -> moteur Python -> persistance.
+Toute mutation externe officielle passe par : acteur -> command queue persistante -> `CanonicalWorldWorker` -> `GovernancePolicy` -> moteur Python -> persistance atomique monde + intervention + budget + audit.
+
+La gouvernance est vérifiée lors de l'exécution puis revalidée juste avant le commit. Une commande déjà mise en queue peut donc être refusée si une permission, un niveau, un budget ou une sanction a changé entre-temps ; ce refus reste auditable.
 
 Les expériences, benchmarks et tests utilisent des forks explicitement non canoniques, isolés et incapables d'écrire dans le monde réel. Ils ne recopient pas la gouvernance active.
 
