@@ -8,6 +8,7 @@ from typing import Any, Iterable
 from ..database.sqlite_repo import SQLiteRepository
 from ..runtime.actors import ActorPermission, normalize_permissions
 from ..runtime.storage import RuntimeStorage
+from .invariants import ensure_governance_invariants
 from .models import BudgetKind, JournalEntryType, PowerLevel, SanctionType
 from .storage import GovernanceStorage
 
@@ -19,6 +20,7 @@ class GovernanceAdminService:
         self.repository = repository
         self.runtime = RuntimeStorage(repository)
         self.storage = GovernanceStorage(repository)
+        ensure_governance_invariants(repository)
 
     @staticmethod
     def _utc(value: datetime | None = None) -> datetime:
@@ -32,6 +34,74 @@ class GovernanceAdminService:
         if performed_by != "father":
             raise PermissionError("Only the Father may administer divine governance")
 
+    @staticmethod
+    def _require_reason(reason: str) -> str:
+        normalized = reason.strip()
+        if not normalized:
+            raise ValueError("A non-empty governance reason is required")
+        return normalized
+
+    def register_actor(
+        self,
+        *,
+        actor_id: str,
+        kind: str,
+        display_name: str,
+        permissions: Iterable[str | ActorPermission] = (),
+        active: bool = True,
+        reason: str,
+        performed_by: str = "father",
+        now_utc: datetime | None = None,
+    ):
+        """Register a runtime actor and Observation-level governance state atomically."""
+        self._require_father(performed_by)
+        reason = self._require_reason(reason)
+        if not actor_id.strip() or not kind.strip() or not display_name.strip():
+            raise ValueError("actor_id, kind and display_name are required")
+        normalized = normalize_permissions(permissions)
+        now = self._utc(now_utc)
+        with self.repository._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if conn.execute("SELECT 1 FROM runtime_actors WHERE id = ?", (actor_id,)).fetchone():
+                raise ValueError(f"Actor {actor_id!r} already exists")
+            conn.execute(
+                """
+                INSERT INTO runtime_actors(id, kind, display_name, permissions_json, active)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    actor_id,
+                    kind,
+                    display_name,
+                    json.dumps(sorted(normalized)),
+                    int(active),
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO divine_actor_state(actor_id, max_power_level, updated_at_utc)
+                VALUES (?, ?, ?)
+                """,
+                (actor_id, int(PowerLevel.OBSERVATION), now.isoformat()),
+            )
+            self.storage.append_audit_in_transaction(
+                conn,
+                event_type="actor_registered",
+                actor_id=performed_by,
+                subject_actor_id=actor_id,
+                payload={
+                    "kind": kind,
+                    "display_name": display_name,
+                    "permissions": sorted(normalized),
+                    "active": active,
+                    "power_level": int(PowerLevel.OBSERVATION),
+                    "reason": reason,
+                },
+                created_at_utc=now,
+            )
+            conn.commit()
+        return self.runtime.get_actor(actor_id)
+
     def set_permissions(
         self,
         actor_id: str,
@@ -42,6 +112,7 @@ class GovernanceAdminService:
         now_utc: datetime | None = None,
     ):
         self._require_father(performed_by)
+        reason = self._require_reason(reason)
         actor = self.runtime.get_actor(actor_id)
         normalized = normalize_permissions(permissions)
         now = self._utc(now_utc)
@@ -72,6 +143,7 @@ class GovernanceAdminService:
         now_utc: datetime | None = None,
     ):
         self._require_father(performed_by)
+        reason = self._require_reason(reason)
         self.runtime.get_actor(actor_id)
         now = self._utc(now_utc)
         with self.repository._connect() as conn:
@@ -101,6 +173,7 @@ class GovernanceAdminService:
         now_utc: datetime | None = None,
     ):
         self._require_father(performed_by)
+        reason = self._require_reason(reason)
         self.runtime.get_actor(actor_id)
         return self.storage.set_power_level(
             actor_id,
@@ -121,6 +194,7 @@ class GovernanceAdminService:
         now_utc: datetime | None = None,
     ) -> int:
         self._require_father(performed_by)
+        reason = self._require_reason(reason)
         self.runtime.get_actor(actor_id)
         return self.storage.adjust_budget(
             actor_id,
@@ -143,6 +217,7 @@ class GovernanceAdminService:
         now_utc: datetime | None = None,
     ):
         self._require_father(performed_by)
+        reason = self._require_reason(reason)
         self.runtime.get_actor(actor_id)
         now = self._utc(now_utc)
         return self.storage.impose_sanction(
@@ -164,6 +239,7 @@ class GovernanceAdminService:
         now_utc: datetime | None = None,
     ):
         self._require_father(performed_by)
+        reason = self._require_reason(reason)
         return self.storage.lift_sanction(
             sanction_id,
             lifted_by=performed_by,
@@ -208,6 +284,7 @@ class DivineGovernanceService:
     def __init__(self, repository: SQLiteRepository) -> None:
         self.runtime = RuntimeStorage(repository)
         self.storage = GovernanceStorage(repository)
+        ensure_governance_invariants(repository)
 
     @staticmethod
     def _now() -> datetime:
@@ -224,7 +301,9 @@ class DivineGovernanceService:
         git_commit: str | None = None,
         context: dict[str, Any] | None = None,
     ) -> int:
-        self.runtime.get_actor(actor_id)
+        actor = self.runtime.get_actor(actor_id)
+        if not actor.active:
+            raise PermissionError("Inactive actors cannot write journal entries")
         return self.storage.add_journal_entry(
             actor_id=actor_id,
             entry_type=entry_type,
