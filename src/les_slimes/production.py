@@ -5,12 +5,16 @@ import json
 import os
 import signal
 import threading
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
 from .api.app import create_app
 from .config import WorldConfig
 from .database.factory import DATABASE_URL_ENV, canonical_repository_from_env
+from .database.migrate import migrate_sqlite_to_postgres
+from .database.postgres_repo import PostgreSQLRepository
+from .database.sqlite_repo import SQLiteRepository
 from .runtime import CanonicalRuntime, CanonicalWorkerService, RuntimeStorage, WorkerServiceConfig
 from .world.engine import World
 
@@ -94,6 +98,18 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_migrate(args: argparse.Namespace) -> int:
+    target = canonical_repository_from_env()
+    if not isinstance(target, PostgreSQLRepository):
+        raise RuntimeError(
+            f"{DATABASE_URL_ENV} must select PostgreSQL for the migration target"
+        )
+    source = SQLiteRepository(args.sqlite)
+    result = migrate_sqlite_to_postgres(source, target)
+    print(json.dumps(asdict(result), indent=2, sort_keys=True))
+    return 0
+
+
 def cmd_worker(_args: argparse.Namespace) -> int:
     service = _service()
     stop = threading.Event()
@@ -132,6 +148,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=str(Path(__file__).resolve().parents[2] / "config" / "default.yaml"),
     )
     init.set_defaults(func=cmd_init)
+
+    migrate = sub.add_parser(
+        "migrate",
+        help="Migrate a stopped canonical SQLite world into a fresh PostgreSQL database",
+    )
+    migrate.add_argument("--sqlite", required=True, help="Path to the canonical SQLite DB")
+    migrate.set_defaults(func=cmd_migrate)
 
     worker = sub.add_parser("worker", help="Run the canonical worker continuously")
     worker.set_defaults(func=cmd_worker)
