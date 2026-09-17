@@ -27,18 +27,21 @@ Toutes les opérations GitHub des assistants Les Slimes restent limitées à ce 
 
 Le monde officiel possède une seule horloge, un seul état, une seule histoire, une seule chaîne de commandes et une seule persistance active.
 
-Le monde canonique ne change jamais de mode. Les anciens modes globaux ont été supprimés. Les restrictions concernent les identités, permissions, budgets et sanctions des acteurs.
+Le monde canonique ne change jamais de mode. Les restrictions concernent les identités, permissions, niveaux de pouvoir, budgets et sanctions des acteurs.
 
 Toute mutation externe officielle suit :
 
 ```text
 acteur
-  -> permission
   -> command queue persistante
   -> CanonicalWorldWorker
+  -> GovernancePolicy
+       acteur actif + permission + niveau + sanctions + budget
   -> moteur Python
-  -> persistance
+  -> persistance atomique monde + intervention + budget + audit
 ```
+
+La gouvernance est vérifiée à l'exécution puis revalidée juste avant commit. Une commande peut donc être mise en queue puis rejetée si l'autorité a changé ; ce refus reste auditable.
 
 Les expériences, benchmarks et tests utilisent des copies/forks explicitement **non canoniques**, isolés et incapables d'écrire dans le monde officiel.
 
@@ -52,8 +55,10 @@ React + TypeScript + PixiJS / Netlify
         Command Queue persistante
                  |
        CanonicalWorldWorker Python
-        horloge + ticks + catch-up
-          writer unique + audit
+                 |
+        GovernancePolicy
+                 |
+         moteur Python World
                  |
         persistance canonique
       SQLite -> PostgreSQL durable
@@ -85,8 +90,27 @@ Google Drive : rapports/snapshots/journaux uniquement
 - `worker-run` et `worker-status` ;
 - health runtime : tick, retard, ticks dus, backlog et lease ;
 - reprise après crash via événement `command_applied` et takeover du lease ;
-- tests de concurrence et de digest crash/takeover == exécution continue ;
-- tests empêchant la réintroduction des principaux contournements.
+- tests de concurrence et de digest crash/takeover == exécution continue.
+
+## Gouvernance divine déjà présente
+
+- niveaux : Observation, Miracle, Décret, Loi, Transgression ;
+- permissions techniques séparées du niveau de pouvoir ;
+- budgets append-only : miracle, législatif, faveur, dette de transgression ;
+- sanctions déclaratives et temporaires ;
+- `GovernancePolicy` centrale ;
+- double autorisation pour les propositions de l'Observateur ;
+- intervention attribuée pour chaque mutation divine ;
+- débit budget + audit + sauvegarde du monde atomiques ;
+- aucun double débit après crash/replay ;
+- audit chaîné par hash ;
+- journaux, propositions et Conseil divin persistants ;
+- seul le Père peut modifier permissions, pouvoirs, budgets et sanctions ;
+- aucune commande permettant à un dieu d'augmenter ses propres droits ;
+- la Transgression n'est pas un bypass automatique ;
+- la gouvernance reste hors du digest biologique ;
+- les forks scientifiques ne recopient pas la gouvernance active ;
+- administration via CLI Père, affichage lecture seule dans le Lab.
 
 ## Moteur déjà présent
 
@@ -100,8 +124,6 @@ Première phase : deux GPT Projects autonomes.
 - **Chaos** : diversité, variation, exploration, nouveauté, rupture des équilibres stériles.
 
 Aucun dieu ne commande directement les Slimes.
-
-Niveaux de pouvoir : observation, miracle allowlisté, décret via DSL, loi moteur limitée, transgression interne rare et sanctionnable.
 
 Jean-Philippe est le Père : budgets, récompenses, sanctions, permissions et Constitution divine.
 
@@ -117,12 +139,12 @@ Google Drive n'est jamais utilisé comme base active.
 
 # Prochaines étapes
 
-1. brancher budgets/sanctions/journaux divins sur les permissions ;
-2. construire l'API Python ;
-3. construire React + TypeScript + PixiJS ;
-4. migrer vers une persistance PostgreSQL durable ;
-5. définir le déploiement et la supervision du worker canonique ;
-6. automatiser rapports/Drive ;
-7. créer Ordre/Chaos et leurs tâches planifiées lorsque la gouvernance est prête.
+1. construire l'API Python/FastAPI et l'authentification Père/acteurs ;
+2. construire React + TypeScript + PixiJS ;
+3. migrer vers une persistance PostgreSQL durable ;
+4. définir le déploiement et la supervision du worker canonique ;
+5. automatiser rapports/Drive ;
+6. créer Ordre/Chaos et leurs tâches planifiées ;
+7. exporter journaux/Conseil vers Drive sans changer la source transactionnelle.
 
 Pour reprendre le projet, lire d'abord `docs/PROJECT_STATE.md` puis `docs/PROJECT_INSTRUCTIONS.md`.

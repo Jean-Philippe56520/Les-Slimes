@@ -16,6 +16,7 @@ if str(SRC) not in sys.path:
 
 from les_slimes.analytics import build_world_report
 from les_slimes.database.sqlite_repo import SQLiteRepository
+from les_slimes.governance.service import GovernanceAdminService
 from les_slimes.observer import ObserverProposal, proposal_to_command
 from les_slimes.runtime import RuntimeStorage
 from les_slimes.world.engine import World
@@ -35,6 +36,7 @@ if not repo.exists():
     st.stop()
 
 storage = RuntimeStorage(repo)
+governance_admin = GovernanceAdminService(repo)
 world = repo.load_world()
 metrics = world.metrics()
 report = build_world_report(world)
@@ -197,6 +199,28 @@ with runtime_tab:
         for actor in storage.list_actors()
     ]
     st.dataframe(pd.DataFrame(actor_rows), hide_index=True, use_container_width=True)
+
+    st.subheader("Gouvernance divine")
+    governance_rows = []
+    for actor_id in ("father", "order", "chaos"):
+        status = governance_admin.status(actor_id)
+        governance_rows.append(
+            {
+                "acteur": actor_id,
+                "actif": status["active"],
+                "pouvoir": status["max_power_name"],
+                "miracle": status["budgets"]["miracle"],
+                "legislatif": status["budgets"]["legislative"],
+                "faveur": status["budgets"]["favor"],
+                "dette_transgression": status["budgets"]["transgression_debt"],
+                "sanctions": ", ".join(item["sanction_type"] for item in status["active_sanctions"]),
+            }
+        )
+    st.dataframe(pd.DataFrame(governance_rows), hide_index=True, use_container_width=True)
+    st.caption(
+        "Administration de la gouvernance : CLI Père uniquement jusqu'à l'API authentifiée. "
+        f"Chaîne d'audit valide : {governance_admin.storage.validate_audit_chain()}"
+    )
 
 with history_tab:
     st.subheader("Checkpoints")

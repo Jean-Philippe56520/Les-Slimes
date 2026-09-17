@@ -1,6 +1,6 @@
 # Gouvernance divine
 
-Ce document définit la gouvernance cible des agents IA de Les Slimes.
+Ce document définit la gouvernance des agents IA de Les Slimes et son implémentation persistante.
 
 ## Périmètre Git
 
@@ -13,11 +13,13 @@ Il existe un seul monde Les Slimes canonique, persistant et partagé par les Sli
 
 Il possède une seule horloge, un seul état officiel, une seule histoire, une seule chaîne de commandes et une seule persistance active.
 
-Le monde canonique ne change jamais de mode. Les anciens modes globaux ont été supprimés.
+Le monde canonique ne change jamais de mode.
 
-Toute mutation externe officielle passe par : acteur -> permission -> command queue persistante -> `CanonicalWorldWorker` -> moteur Python -> persistance.
+Toute mutation externe officielle passe par : acteur -> command queue persistante -> `CanonicalWorldWorker` -> `GovernancePolicy` -> moteur Python -> persistance atomique monde + intervention + budget + audit.
 
-Les restrictions portent sur les permissions, budgets et sanctions des acteurs. Les expériences, benchmarks et tests utilisent des forks explicitement non canoniques, isolés et incapables d'écrire dans le monde réel.
+La gouvernance est vérifiée lors de l'exécution puis revalidée juste avant le commit. Une commande déjà mise en queue peut donc être refusée si une permission, un niveau, un budget ou une sanction a changé entre-temps. Une fois ce refus persisté, il est terminal : une évolution ultérieure de la gouvernance nécessite une nouvelle commande et ne peut pas ressusciter l'ancienne.
+
+Les expériences, benchmarks et tests utilisent des forks explicitement non canoniques, isolés et incapables d'écrire dans le monde réel. Ils ne recopient pas la gouvernance active.
 
 ## Acteurs initiaux
 
@@ -35,17 +37,147 @@ Aucun dieu n'est intrinsèquement bon ou mauvais. La doctrine oriente l'analyse 
 
 ## Le Père
 
-Jean-Philippe est le Père. Il peut attribuer/retirer budgets et pouvoirs, récompenser, sanctionner, suspendre un dieu, restaurer une loi et modifier la Constitution divine.
+Jean-Philippe est le Père. Il peut attribuer/retirer permissions, budgets et niveaux de pouvoir, récompenser, sanctionner, suspendre un dieu, restaurer une loi et modifier la Constitution divine.
 
-## Pouvoirs
+Le Père n'est pas limité par les budgets d'exécution du runtime mais ses interventions restent attribuées et auditées. Il n'est jamais hors historique.
+
+## Pouvoirs persistants
 
 1. Observation : lecture et analyse.
 2. Miracle : commande allowlistée déjà prévue par le moteur.
 3. Décret : règle déclarative utilisant le DSL existant.
-4. Loi : modification limitée du moteur Python, normalement couverte par budget législatif.
+4. Loi : modification limitée du moteur Python, normalement couverte par budget législatif et réalisée via branche/PR GitHub.
 5. Transgression : modification interne hors budget/autorité, rare, attribuée, journalisée, réversible et sanctionnable.
 
-Une transgression reste limitée à l'univers Les Slimes et ne permet jamais de sortir du périmètre du projet.
+Ordre et Chaos démarrent au niveau Observation. Le Père possède le niveau maximal.
+
+Une Transgression n'est **pas** un bouton ou un bypass permettant d'ignorer les garde-fous. C'est une classification d'une intervention sortie de l'autorité normale, qui doit rester attribuable et sanctionnable. Elle ne permet jamais de sortir du périmètre du projet ni de contourner les méta-lois.
+
+## Permissions, pouvoir, budget et sanctions
+
+Ces quatre notions sont séparées :
+
+- permission technique : primitive que l'acteur peut appeler ;
+- niveau de pouvoir : catégorie politique maximale autorisée ;
+- budget : capacité quantitative d'exécution ;
+- sanction : restriction temporaire ou ciblée.
+
+Une commande n'est autorisée que si toutes les conditions nécessaires sont satisfaites.
+
+Les commandes existantes sont classifiées ainsi :
+
+- nourriture, signal, ajout/retrait de mystère : Miracle, budget `miracle` ;
+- ajout/retrait de règle DSL : Décret, budget `legislative`.
+
+Les Lois restent des changements GitHub du moteur ; elles ne deviennent pas des commandes du `World`.
+
+## Budgets
+
+Budgets persistants actuels :
+
+- `miracle` ;
+- `legislative` ;
+- `favor` ;
+- `transgression_debt`.
+
+Les budgets utilisent un ledger append-only : chaque allocation, récompense ou dépense reste dans l'historique. Un budget nul n'interdit pas de proposer ; il interdit l'exécution autonome normale correspondante.
+
+Une contrainte SQLite garantit qu'une même intervention ne peut produire qu'un seul débit négatif, même si un futur bug Python tente de la rejouer.
+
+La faveur n'accorde automatiquement aucun droit ni budget. Une éventuelle conversion devra être définie explicitement par une loi future.
+
+## Sanctions
+
+Sanctions allowlistées actuelles :
+
+- suspension ;
+- refus des Miracles ;
+- refus des Décrets ;
+- gel du budget Miracle ;
+- gel du budget législatif ;
+- plafond temporaire du niveau de pouvoir.
+
+Une sanction peut avoir une date d'expiration ou être levée par le Père. Aucun code arbitraire n'est accepté dans une sanction.
+
+## Cycle de vie d'une intervention
+
+États autorisés : `proposed`, `authorized`, `executed`, `rejected`, `cancelled`, `transgression`.
+
+Les états suivants sont terminaux :
+
+- `executed` ;
+- `rejected` ;
+- `cancelled`.
+
+Des triggers SQLite empêchent toute transition depuis un état terminal vers un autre état. En particulier, `rejected -> executed` est impossible.
+
+Le rejet d'une commande et celui de son intervention sont persistés dans **la même transaction SQLite**, avec l'entrée d'audit. Un crash au milieu de cette transaction rollback l'ensemble : on n'obtient jamais volontairement un état `intervention rejected / command pending` issu du chemin normal.
+
+Les anciennes incohérences éventuelles sont traitées défensivement : si une commande pending référence déjà une intervention `rejected` ou `cancelled`, le Worker termine la commande comme rejetée sans mutation du monde ni dépense.
+
+## Atomicité des interventions réussies
+
+Pour une mutation divine canonique, le Worker revalide juste avant le commit :
+
+- acteur actif ;
+- permission technique ;
+- niveau de pouvoir ;
+- sanctions ;
+- budget disponible ;
+- permission d'approbation Observateur si nécessaire.
+
+La sauvegarde du `World`, le débit du budget, l'état de l'intervention et l'entrée d'audit sont écrits dans la même transaction SQLite.
+
+Un crash après ce commit mais avant la mise à jour du statut de la command queue est réconcilié par l'événement `command_applied` et ne provoque pas de double débit.
+
+## Observateur
+
+Une intervention issue d'une proposition Observateur exige simultanément :
+
+1. la permission technique de la commande finale ;
+2. `observer.apply_proposal` ;
+3. le niveau de pouvoir requis ;
+4. le budget requis ;
+5. l'absence de sanction bloquante.
+
+L'identité de l'Observateur ne prête jamais ses droits à l'acteur approbateur.
+
+## Administration et cycle de vie des acteurs
+
+`GovernanceAdminService` est le chemin de confiance pour :
+
+- enregistrer un nouvel acteur ;
+- modifier ses permissions ;
+- activer/suspendre techniquement l'acteur ;
+- modifier son niveau de pouvoir ;
+- modifier ses budgets ;
+- imposer ou lever ses sanctions.
+
+Dans la phase actuelle, seul `father` est accepté comme administrateur. Toute mutation administrative exige une raison non vide et produit une entrée d'audit.
+
+Un acteur enregistré par le Père reçoit dans la même transaction son `RuntimeActor` et un état de gouvernance au niveau Observation. Les acteurs runtime historiques dépourvus d'état sont backfillés au niveau Observation avant le traitement canonique.
+
+Les anciennes primitives mutantes de `RuntimeStorage` sont conservées uniquement pour compatibilité/migration interne. Elles ne sont pas un canal d'administration autorisé ; les surfaces externes sont testées pour ne jamais les appeler.
+
+Aucune commande canonique ne permet à Ordre ou Chaos d'augmenter ses propres permissions, budgets, niveau de pouvoir ou de retirer ses sanctions.
+
+L'administration est exposée par CLI Père jusqu'à la création de l'API authentifiée. Streamlit affiche la gouvernance en lecture seule.
+
+## Imports et frontière logicielle
+
+`governance/__init__.py` reste volontairement minimal et n'importe ni policy, ni service, ni storage. `runtime.commands` peut donc importer les enums de `governance.models` sans créer de cycle d'import.
+
+La CI vérifie les imports depuis des interpréteurs Python vierges dans plusieurs ordres de chargement. Un test architectural vérifie également que le Lab, le CLI principal et l'Observateur ne modifient pas directement les tables ou primitives d'administration de la gouvernance.
+
+## Audit et journaux
+
+Les interventions sont persistées avec identité, niveau, permission, commande source, budget et statut.
+
+Le journal d'audit est append-only et chaîné par hash afin de détecter une altération de l'historique.
+
+Les journaux divins persistants distinguent notamment : observation, hypothèse, décision, argument, résultat, postmortem et conseil.
+
+La gouvernance n'entre pas dans `World.state_digest()` : le digest scientifique du monde reste séparé de l'état politique des dieux.
 
 ## Méta-lois
 
@@ -69,17 +201,13 @@ Toute modification substantielle part de `main` à jour :
 Avant : vérifier main/commits, lire code/tests, documenter observation, hypothèse, bénéfice, risque et budget.
 Après : syntaxe/imports, tests ciblés, suite complète si moteur/RNG/DB/worker/persistance, save/reload/digest si pertinent, contrôle du diff, journalisation, push et vérification distante.
 
-## Budgets
-
-Prévoir au minimum : budget de miracle, budget législatif, faveur du Père, dette de transgression, sanctions temporaires et domaines éventuels.
-Un budget nul n'interdit pas de proposer ; il interdit l'exécution autonome normale correspondante.
-
 ## Conseil divin
 
-Ordre et Chaos peuvent lire leurs journaux respectifs, soutenir/contester/amender une proposition, publier des arguments, proposer une action commune et saisir le Père.
-Un dieu ne doit jamais inventer la position de l'autre : il lit son journal ou sa proposition réelle.
+Ordre et Chaos peuvent publier des positions réelles `support`, `oppose`, `amend`, `abstain` ou `refer_to_father` sur une proposition. Un dieu ne doit jamais inventer la position de l'autre : il lit la position persistée réelle.
 
-## Tâches planifiées
+Le stockage minimal du Conseil existe ; l'automatisation hebdomadaire viendra après l'API et l'activation des dieux autonomes.
+
+## Tâches planifiées futures
 
 ### Cycle quotidien
 

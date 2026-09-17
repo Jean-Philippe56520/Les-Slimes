@@ -13,6 +13,7 @@ from .analytics import build_world_report
 from .config import WorldConfig
 from .database.sqlite_repo import SQLiteRepository
 from .experiments import create_experiment_fork, run_experiment_fork
+from .governance.cli import register_governance_subcommands
 from .observer import ObserverProposal, proposal_to_command
 from .runtime import (
     CanonicalRuntime,
@@ -410,6 +411,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_exp_run.add_argument("--ticks", type=int, required=True)
     p_exp_run.set_defaults(func=cmd_experiment_run)
 
+    register_governance_subcommands(sub)
     return parser
 
 
