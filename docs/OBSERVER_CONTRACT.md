@@ -10,10 +10,26 @@ L'Observateur est externe au cerveau des Slimes. Il lit le monde canonique, form
 4. Un acteur autorisé examine la proposition.
 5. Une proposition mutante est convertie en description de commande par `proposal_to_command`.
 6. L'acteur approbateur soumet cette commande dans la command queue avec `source_proposal_id`.
-7. Le `CanonicalWorldWorker` vérifie identité + permission, applique la commande puis persiste l'état et l'événement.
-8. Une proposition analytique reste lecture seule et ne crée aucune commande.
+7. Le `CanonicalWorldWorker` vérifie identité, permission technique, niveau de pouvoir, sanctions et budget.
+8. Une commande provenant de l'Observateur exige en plus `observer.apply_proposal`.
+9. Si l'autorisation est valide, l'application du monde, le débit éventuel du budget et l'audit sont persistés atomiquement.
+10. Une proposition analytique reste lecture seule et ne crée aucune commande.
 
-L'identité de l'Observateur ne remplace jamais celle de l'acteur qui autorise l'intervention. La provenance doit permettre de distinguer qui a proposé et qui a approuvé.
+L'identité de l'Observateur ne remplace jamais celle de l'acteur qui autorise l'intervention. La provenance distingue qui a proposé et qui a approuvé.
+
+## Double autorisation
+
+Une proposition mutante de l'Observateur ne suffit jamais à donner un pouvoir.
+
+L'acteur approbateur doit posséder simultanément :
+
+- `observer.apply_proposal` ;
+- la permission de la commande finale ;
+- le niveau de pouvoir requis ;
+- le budget requis, sauf exemption explicite du Père ;
+- aucune sanction bloquante.
+
+Exemple : une proposition `deposit_food` approuvée par Ordre nécessite à la fois `observer.apply_proposal` et `world.deposit_food`, un niveau Miracle et un budget Miracle disponible.
 
 ## Types
 
@@ -41,8 +57,9 @@ L'Observateur ne peut jamais :
 - exécuter du Python arbitraire ;
 - modifier le moteur ;
 - injecter une action hors registre de commandes/allowlist ;
-- contourner les permissions de l'acteur approbateur ;
+- contourner la gouvernance de l'acteur approbateur ;
+- prêter ses propres droits à l'acteur approbateur ;
 - transformer une hypothèse en conclusion scientifique sans métriques ;
 - écrire dans un autre repo.
 
-Toute intervention issue d'une proposition doit être attribuable et traverser la command queue puis le writer unique.
+Toute intervention issue d'une proposition doit être attribuable et traverser la command queue, la gouvernance puis le writer unique.
