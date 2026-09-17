@@ -73,7 +73,8 @@ Google Drive : rapports/snapshots/journaux uniquement
 - `CanonicalRuntime.advance_to(target_time)` ;
 - catch-up déterministe ;
 - command queue SQLite ordonnée, idempotente et paginée ;
-- acteurs persistants et permissions ;
+- acteurs persistants `father`, `herald`, `order`, `chaos`, `observer`, `system` ;
+- `father` représente le Créateur et `herald` Jean-Philippe, Héraut distinct sans permission mutante par défaut ;
 - registre central de commandes ;
 - commandes nourriture, signal, règles comportementales et mystères ;
 - validation des payloads avant mise en queue ;
@@ -105,7 +106,8 @@ Google Drive : rapports/snapshots/journaux uniquement
 - aucun double débit après crash/replay ;
 - audit chaîné par hash ;
 - journaux, propositions et Conseil divin persistants ;
-- seul le Créateur peut actuellement modifier permissions, pouvoirs, budgets et sanctions via l'identité technique `father` ;
+- seul le Créateur peut modifier permissions, pouvoirs, budgets et sanctions via `father` ;
+- `herald` est Observation/zero budget/zero permission mutante par défaut et n'est pas administrateur ;
 - aucune commande permettant à un dieu d'augmenter ses propres droits ;
 - la Transgression n'est pas un bypass automatique ;
 - la gouvernance reste hors du digest biologique ;
@@ -125,11 +127,9 @@ Première phase : deux GPT Projects autonomes.
 
 Aucun dieu ne commande directement les Slimes.
 
-Le **Créateur**, aussi nommé le **Père**, est l'autorité souveraine de la Constitution divine. L'identité technique actuelle `father` représente le Créateur.
+Le **Créateur**, aussi nommé le **Père**, est l'autorité souveraine de la Constitution divine. L'identité technique `father` représente le Créateur.
 
-Jean-Philippe est le **Héraut** du Créateur : Porte-parole et Messager auprès d'Ordre et de Chaos. Le Héraut peut transmettre des paroles, porter des requêtes et demander des analyses, mais sa parole ne modifie pas automatiquement permissions, budgets, sanctions ou pouvoirs.
-
-L'identité technique séparée `herald` reste à créer ; elle ne doit jamais être simulée en réutilisant silencieusement `father`.
+Jean-Philippe est le **Héraut** du Créateur : Porte-parole et Messager auprès d'Ordre et de Chaos. L'identité technique distincte `herald` le représente sans hériter des privilèges de `father`.
 
 # Persistance
 
@@ -143,13 +143,12 @@ Google Drive n'est jamais utilisé comme base active.
 
 # Prochaines étapes
 
-1. aligner techniquement la gouvernance sur l'ontologie Créateur/Héraut et introduire l'acteur `herald` sans affaiblir `father` ;
-2. construire l'API Python/FastAPI et l'authentification Créateur/Héraut/acteurs ;
-3. construire React + TypeScript + PixiJS ;
-4. migrer vers une persistance PostgreSQL durable ;
-5. définir le déploiement et la supervision du worker canonique ;
-6. automatiser rapports/Drive ;
-7. créer Ordre/Chaos et leurs tâches planifiées ;
-8. exporter journaux/Conseil vers Drive sans changer la source transactionnelle.
+1. construire l'API Python/FastAPI et l'authentification Créateur/Héraut/acteurs sans faire confiance à un `actor_id` fourni par le client ;
+2. construire React + TypeScript + PixiJS ;
+3. migrer vers une persistance PostgreSQL durable ;
+4. définir le déploiement et la supervision du worker canonique ;
+5. automatiser rapports/Drive ;
+6. créer Ordre/Chaos et leurs tâches planifiées ;
+7. exporter journaux/Conseil vers Drive sans changer la source transactionnelle.
 
 Pour reprendre le projet, lire d'abord `docs/PROJECT_STATE.md` puis `docs/PROJECT_INSTRUCTIONS.md`.

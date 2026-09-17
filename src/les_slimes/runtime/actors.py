@@ -29,13 +29,20 @@ class RuntimeActor:
 
 
 FATHER_PERMISSIONS = frozenset(permission.value for permission in ActorPermission)
+HERALD_PERMISSIONS = frozenset()
 
 DEFAULT_ACTORS: tuple[RuntimeActor, ...] = (
     RuntimeActor(
         id="father",
         kind="father",
-        display_name="Le Pere",
+        display_name="Le Createur",
         permissions=FATHER_PERMISSIONS,
+    ),
+    RuntimeActor(
+        id="herald",
+        kind="herald",
+        display_name="Jean-Philippe, le Heraut",
+        permissions=HERALD_PERMISSIONS,
     ),
     RuntimeActor(
         id="order",
