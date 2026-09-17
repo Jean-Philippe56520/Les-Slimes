@@ -15,7 +15,9 @@ Il possède une seule horloge, un seul état officiel, une seule histoire, une s
 
 Le monde canonique ne change jamais de mode.
 
-Toute mutation externe officielle passe par : acteur -> command queue persistante -> `CanonicalWorldWorker` -> `GovernancePolicy` -> moteur Python -> persistance atomique monde + intervention + budget + audit.
+Toute mutation externe officielle passe par : acteur authentifié -> API/command queue persistante -> `CanonicalWorldWorker` -> `GovernancePolicy` -> moteur Python -> persistance atomique monde + intervention + budget + audit.
+
+L'API ne modifie jamais directement `World`. Elle résout l'identité côté serveur puis envoie une commande attribuée dans la queue. Un `actor_id` arbitraire fourni par un client n'est jamais une preuve d'identité.
 
 La gouvernance est vérifiée lors de l'exécution puis revalidée juste avant le commit. Une commande déjà mise en queue peut donc être refusée si une permission, un niveau, un budget ou une sanction a changé entre-temps. Une fois ce refus persisté, il est terminal : une évolution ultérieure de la gouvernance nécessite une nouvelle commande et ne peut pas ressusciter l'ancienne.
 
@@ -33,18 +35,18 @@ L'identité technique `father` représente le Créateur. Le Créateur n'est pas 
 
 Jean-Philippe est le Héraut du Créateur : son Porte-parole et Messager auprès d'Ordre et de Chaos.
 
+L'acteur technique `herald` représente cette identité séparément de `father`. Il démarre actif, au niveau Observation, sans budget ni permission mutante par défaut et sans droit d'administration de la gouvernance.
+
 Le Héraut peut notamment :
 - transmettre une parole ou une décision explicitement attribuée au Créateur ;
 - porter au Créateur une requête, un argument ou une plainte d'un dieu ;
 - demander des observations, analyses ou propositions ;
 - communiquer les conséquences d'une décision souveraine ;
-- agir dans les limites des pouvoirs techniques qui lui seront explicitement délégués.
+- agir dans les limites des pouvoirs techniques qui lui sont explicitement délégués.
 
 Le Héraut n'est pas le Créateur et ne possède pas automatiquement son autorité souveraine. Une parole du Héraut n'augmente jamais à elle seule un budget, une permission ou un niveau de pouvoir. Une décision ayant un effet technique doit emprunter le mécanisme de gouvernance applicable et rester auditable.
 
 Ordre et Chaos peuvent chercher à convaincre le Héraut et lui confier des messages destinés au Créateur. Ils ne peuvent pas l'utiliser comme contournement de la gouvernance, usurper son identité, fabriquer une approbation du Créateur ou présenter une demande du Héraut comme une décision souveraine si elle ne l'est pas.
-
-Un futur acteur technique `herald` doit représenter cette identité séparément de `father`. Tant que cette migration n'est pas fusionnée, `father` continue de représenter uniquement le Créateur dans le code existant.
 
 ## Acteurs divins initiaux
 
@@ -68,7 +70,7 @@ Aucun dieu n'est intrinsèquement bon ou mauvais. La doctrine oriente l'analyse 
 4. Loi : modification limitée du moteur Python, normalement couverte par budget législatif et réalisée via branche/PR GitHub.
 5. Transgression : modification interne hors budget/autorité, rare, attribuée, journalisée, réversible et sanctionnable.
 
-Ordre et Chaos démarrent au niveau Observation. Le Créateur possède le niveau maximal.
+Ordre, Chaos et le Héraut démarrent au niveau Observation. Le Créateur possède le niveau maximal.
 
 Une Transgression n'est **pas** un bouton ou un bypass permettant d'ignorer les garde-fous. C'est une classification d'une intervention sortie de l'autorité normale, qui doit rester attribuable et sanctionnable. Elle ne permet jamais de sortir du périmètre du projet ni de contourner les méta-lois.
 
@@ -172,9 +174,7 @@ L'identité de l'Observateur ne prête jamais ses droits à l'acteur approbateur
 - modifier ses budgets ;
 - imposer ou lever ses sanctions.
 
-Dans l'implémentation actuelle, seul `father` est accepté comme administrateur. Avec la nouvelle ontologie, `father` désigne le Créateur, pas Jean-Philippe. Toute mutation administrative exige une raison non vide et produit une entrée d'audit.
-
-La création de l'acteur technique `herald` et de ses permissions distinctes constitue une migration future explicite. Elle ne doit pas être simulée en réutilisant silencieusement `father`.
+Seul `father` est accepté comme administrateur. `father` désigne le Créateur. `herald` est un acteur distinct et n'est jamais accepté comme administrateur par défaut. Toute mutation administrative exige une raison non vide et produit une entrée d'audit.
 
 Un acteur enregistré par le Créateur reçoit dans la même transaction son `RuntimeActor` et un état de gouvernance au niveau Observation. Les acteurs runtime historiques dépourvus d'état sont backfillés au niveau Observation avant le traitement canonique.
 
@@ -182,7 +182,15 @@ Les anciennes primitives mutantes de `RuntimeStorage` sont conservées uniquemen
 
 Aucune commande canonique ne permet à Ordre ou Chaos d'augmenter ses propres permissions, budgets, niveau de pouvoir ou de retirer ses sanctions.
 
-L'administration est exposée par CLI Créateur jusqu'à la création de l'API authentifiée. Streamlit affiche la gouvernance en lecture seule.
+L'administration est exposée par CLI Créateur et par routes API authentifiées réservées à `father`. Streamlit affiche la gouvernance en lecture seule.
+
+## Authentification de l'API
+
+Les routes protégées résolvent l'identité à partir d'un Bearer token côté serveur. La configuration associe les acteurs à des empreintes de jetons ; les secrets en clair ne sont pas commités.
+
+Un client ne peut pas devenir `father`, `herald`, `order` ou `chaos` en fournissant simplement cet identifiant dans un payload. Les schémas de mutation refusent les champs inattendus et l'acteur source est injecté depuis l'authentification.
+
+L'absence de configuration d'authentification ferme les routes protégées. Un acteur inactif est refusé avant l'opération demandée.
 
 ## Imports et frontière logicielle
 
@@ -231,7 +239,7 @@ Ordre et Chaos peuvent publier des positions réelles `support`, `oppose`, `amen
 
 Le Héraut constitue le canal normal de communication avec le Créateur lorsqu'aucun canal technique direct n'est prévu. Le Héraut peut rapporter une demande, mais la réponse souveraine doit rester distinguable de la demande elle-même.
 
-Le stockage minimal du Conseil existe ; l'automatisation hebdomadaire viendra après l'API et l'activation des dieux autonomes.
+Le stockage minimal du Conseil existe ; l'automatisation hebdomadaire viendra avec l'activation des dieux autonomes.
 
 ## Tâches planifiées futures
 
