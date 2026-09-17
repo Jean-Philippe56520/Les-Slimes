@@ -1,4 +1,11 @@
-from .council import DivineCouncilStorage
+"""Divine governance package.
+
+Keep this package initializer deliberately minimal. Runtime command definitions import
+``governance.models``; importing policy/service/storage here would create an import
+cycle back into ``runtime.commands``. Consumers should import concrete services from
+their modules, e.g. ``les_slimes.governance.service``.
+"""
+
 from .models import (
     AuthorizationDecision,
     BudgetKind,
@@ -9,21 +16,13 @@ from .models import (
     PowerLevel,
     SanctionType,
 )
-from .policy import GovernancePolicy
-from .service import DivineGovernanceService, GovernanceAdminService
-from .storage import GovernanceStorage
 
 __all__ = [
     "AuthorizationDecision",
     "BudgetKind",
     "DivineActorState",
-    "DivineCouncilStorage",
-    "DivineGovernanceService",
     "DivineIntervention",
     "DivineSanction",
-    "GovernanceAdminService",
-    "GovernancePolicy",
-    "GovernanceStorage",
     "JournalEntryType",
     "PowerLevel",
     "SanctionType",
