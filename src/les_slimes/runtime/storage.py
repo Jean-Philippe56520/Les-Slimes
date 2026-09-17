@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Iterable
 
+from ..database.scope import ensure_canonical_scope
 from ..database.sqlite_repo import SQLiteRepository
 from .actors import DEFAULT_ACTORS, RuntimeActor, normalize_permissions
 from .commands import validate_command_payload
@@ -64,6 +65,7 @@ class RuntimeCommand:
 
 class RuntimeStorage:
     def __init__(self, repository: SQLiteRepository) -> None:
+        ensure_canonical_scope(repository)
         self.repository = repository
         self.initialize_schema()
 
