@@ -6,13 +6,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..database.sqlite_repo import SQLiteRepository
 from ..governance.models import BudgetKind, JournalEntryType, PowerLevel, SanctionType
+from ..governance.query import GovernanceQueryService
 from ..governance.service import DivineGovernanceService, GovernanceAdminService
 from ..runtime.actors import ActorPermission, RuntimeActor
 from ..runtime.canonical import CanonicalRuntime
@@ -134,6 +135,7 @@ def create_app(
     runtime = CanonicalRuntime(repository)
     governance_admin = GovernanceAdminService(repository)
     governance = DivineGovernanceService(repository)
+    governance_query = GovernanceQueryService(repository)
     authenticator = authenticator or ActorAuthenticator.from_env(runtime_storage)
     bearer = HTTPBearer(auto_error=False)
 
@@ -205,6 +207,7 @@ def create_app(
         ticks_due = max(0, int(lag_seconds // metadata.tick_duration_seconds))
         lease = runtime_storage.current_lease()
         lease_valid = bool(lease is not None and lease.expires_at_utc > now)
+        oldest_pending = runtime_storage.oldest_pending_command_utc()
         return {
             "status": "ok",
             "world_tick": world.tick,
@@ -213,11 +216,7 @@ def create_app(
             "lag_seconds": lag_seconds,
             "ticks_due": ticks_due,
             "pending_commands": runtime_storage.pending_command_count(),
-            "oldest_pending_command_utc": (
-                runtime_storage.oldest_pending_command_utc().isoformat()
-                if runtime_storage.oldest_pending_command_utc()
-                else None
-            ),
+            "oldest_pending_command_utc": oldest_pending.isoformat() if oldest_pending else None,
             "writer_lease": {
                 "valid": lease_valid,
                 "holder_id": lease.holder_id if lease is not None else None,
@@ -285,6 +284,16 @@ def create_app(
             "actors": [governance_admin.status(actor.id) for actor in runtime_storage.list_actors()]
         }
 
+    @app.get("/journals", tags=["governance"])
+    def journals(
+        actor_id: str | None = None,
+        limit: int = Query(default=100, ge=1, le=500),
+        _actor: RuntimeActor = Depends(authenticated_actor),
+    ) -> dict[str, Any]:
+        return {
+            "entries": governance_query.recent_journal_entries(actor_id=actor_id, limit=limit)
+        }
+
     @app.post("/journals", status_code=status.HTTP_201_CREATED, tags=["governance"])
     def add_journal(
         request: JournalRequest,
@@ -300,6 +309,16 @@ def create_app(
             context=request.context,
         )
         return {"id": entry_id, "actor_id": actor.id}
+
+    @app.get("/proposals", tags=["governance"])
+    def proposals(
+        actor_id: str | None = None,
+        limit: int = Query(default=100, ge=1, le=500),
+        _actor: RuntimeActor = Depends(authenticated_actor),
+    ) -> dict[str, Any]:
+        return {
+            "proposals": governance_query.recent_proposals(actor_id=actor_id, limit=limit)
+        }
 
     @app.post("/proposals", status_code=status.HTTP_201_CREATED, tags=["governance"])
     def add_proposal(
