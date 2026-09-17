@@ -1,6 +1,6 @@
 # Les Slimes — monde artificiel persistant
 
-**Version actuelle : 0.9.0-alpha**
+**Version actuelle : 0.10.0-alpha**
 
 Les Slimes est un projet de vie artificielle déterministe et persistante. Les Slimes ne sont pas des prompts : ils existent dans un moteur Python simulant biologie, génétique, perception, mémoire, apprentissage, relations sociales, culture et environnement.
 
@@ -32,8 +32,8 @@ Le monde canonique ne change jamais de mode. Les restrictions concernent les ide
 Toute mutation externe officielle suit :
 
 ```text
-acteur
-  -> command queue persistante
+acteur authentifié
+  -> API / command queue persistante
   -> CanonicalWorldWorker
   -> GovernancePolicy
        acteur actif + permission + niveau + sanctions + budget
@@ -50,7 +50,7 @@ Les expériences, benchmarks et tests utilisent des copies/forks explicitement *
 ```text
 React + TypeScript + PixiJS / Netlify
                  |
-                API
+          FastAPI authentifiée
                  |
         Command Queue persistante
                  |
@@ -111,8 +111,20 @@ Google Drive : rapports/snapshots/journaux uniquement
 - aucune commande permettant à un dieu d'augmenter ses propres droits ;
 - la Transgression n'est pas un bypass automatique ;
 - la gouvernance reste hors du digest biologique ;
-- les forks scientifiques ne recopient pas la gouvernance active ;
-- administration via CLI Créateur, affichage lecture seule dans le Lab.
+- les forks scientifiques ne recopient pas la gouvernance active.
+
+## API canonique
+
+FastAPI fournit désormais la frontière réseau du monde :
+
+- `/health`, `/world`, `/world/slimes` en lecture ;
+- `/me` pour l'identité authentifiée ;
+- `POST /commands` pour enqueue uniquement ;
+- lecture/écriture des journaux et propositions ;
+- lecture de la gouvernance ;
+- routes `/admin/...` réservées au Créateur et routées via `GovernanceAdminService`.
+
+L'identité ne vient jamais d'un `actor_id` fourni par le client : un Bearer token est résolu côté serveur vers un acteur persistant. Les jetons eux-mêmes ne sont jamais commités. Voir `docs/API.md`.
 
 ## Moteur déjà présent
 
@@ -143,12 +155,11 @@ Google Drive n'est jamais utilisé comme base active.
 
 # Prochaines étapes
 
-1. construire l'API Python/FastAPI et l'authentification Créateur/Héraut/acteurs sans faire confiance à un `actor_id` fourni par le client ;
-2. construire React + TypeScript + PixiJS ;
-3. migrer vers une persistance PostgreSQL durable ;
-4. définir le déploiement et la supervision du worker canonique ;
-5. automatiser rapports/Drive ;
-6. créer Ordre/Chaos et leurs tâches planifiées ;
-7. exporter journaux/Conseil vers Drive sans changer la source transactionnelle.
+1. migrer la persistance canonique de production vers PostgreSQL durable ;
+2. déployer et superviser réellement le worker canonique et l'API H24 ;
+3. construire React + TypeScript + PixiJS ;
+4. automatiser rapports/Drive ;
+5. créer Ordre/Chaos et leurs tâches planifiées ;
+6. exporter journaux/Conseil vers Drive sans changer la source transactionnelle.
 
 Pour reprendre le projet, lire d'abord `docs/PROJECT_STATE.md` puis `docs/PROJECT_INSTRUCTIONS.md`.

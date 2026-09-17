@@ -40,13 +40,15 @@ Il existe un unique monde Les Slimes canonique, persistant et partagé. Il poss�
 
 Le monde canonique ne change jamais de mode. Les restrictions concernent identités, permissions, niveaux de pouvoir, budgets et sanctions.
 
-Flux d'une mutation externe : acteur -> command queue persistante -> CanonicalWorldWorker -> GovernancePolicy -> moteur Python -> persistance atomique monde + intervention + budget + audit. La gouvernance est revalidée juste avant commit.
+Flux d'une mutation externe : acteur authentifié -> API/command queue persistante -> CanonicalWorldWorker -> GovernancePolicy -> moteur Python -> persistance atomique monde + intervention + budget + audit. La gouvernance est revalidée juste avant commit.
+
+L'API ne modifie jamais directement World. L'identité d'une mutation provient de l'authentification serveur, jamais d'un actor_id arbitraire fourni par le client.
 
 Tests, benchmarks et expériences utilisent des forks NON CANONIQUES isolés, incapables d'écrire dans le monde officiel et ne recopiant pas la gouvernance active.
 
 ARCHITECTURE
 
-Le moteur et les lois métier restent en Python. World Worker : horloge canonique, ticks, commandes, heartbeat, checkpoints, catch-up, writer unique. Gouvernance : pouvoirs, budgets, sanctions, interventions, journaux et audit persistants séparés du digest biologique. Frontend principal : React + TypeScript + PixiJS. Streamlit : Lab science/admin lecture. Dev : SQLite. Production : PostgreSQL durable à choisir. Drive : rapports, expériences, snapshots, journaux et Conseil divin.
+Le moteur et les lois métier restent en Python. FastAPI : lecture canonique, identité, enqueue et administration gouvernée. World Worker : horloge canonique, ticks, commandes, heartbeat, checkpoints, catch-up, writer unique. Gouvernance : pouvoirs, budgets, sanctions, interventions, journaux et audit persistants séparés du digest biologique. Frontend principal : React + TypeScript + PixiJS. Streamlit : Lab science/admin lecture. Dev : SQLite. Production : PostgreSQL durable. Drive : rapports, expériences, snapshots, journaux et Conseil divin.
 
 Le temps biologique ne dépend jamais d'une page ouverte.
 
@@ -54,11 +56,11 @@ ONTOLOGIE DIVINE
 
 LE CRÉATEUR / LE PÈRE : autorité souveraine. Il attribue ou retire permissions, budgets et pouvoirs, récompense, sanctionne, suspend, restaure une loi et peut modifier la Constitution divine. L'identité technique `father` représente le Créateur. Ses interventions restent attribuées et auditées.
 
-LE HÉRAUT : Jean-Philippe est le Porte-parole, Messager et Héraut du Créateur auprès d'Ordre et de Chaos. Il peut transmettre une parole du Créateur, porter une requête d'un dieu, poser une question, demander une analyse ou solliciter une décision. Sa parole n'élève jamais automatiquement les permissions, budgets ou pouvoirs : une décision souveraine ayant un effet technique doit passer par le mécanisme de gouvernance et rester auditable.
+LE HÉRAUT : Jean-Philippe est le Porte-parole, Messager et Héraut du Créateur auprès d'Ordre et de Chaos. L'acteur technique `herald` le représente distinctement de `father`. Il démarre au niveau Observation, sans budget ni permission mutante par défaut, et n'est pas administrateur de la gouvernance.
 
-Ordre et Chaos peuvent argumenter auprès du Héraut et lui confier des requêtes destinées au Créateur. Ils ne doivent jamais l'utiliser comme contournement de la gouvernance, usurper son identité, fabriquer une autorisation ou lui attribuer une décision inexistante.
+Le Héraut peut transmettre une parole du Créateur, porter une requête d'un dieu, poser une question, demander une analyse ou solliciter une décision. Sa parole n'élève jamais automatiquement permissions, budgets ou pouvoirs : une décision souveraine ayant un effet technique doit passer par la gouvernance et rester auditable.
 
-Le futur acteur technique `herald` devra représenter cette identité séparément de `father`. Tant que cette migration n'est pas fusionnée, ne jamais réinterpréter silencieusement `father` comme Jean-Philippe.
+Ordre et Chaos peuvent argumenter auprès du Héraut et lui confier des requêtes destinées au Créateur. Ils ne doivent jamais l'utiliser comme contournement, usurper son identité, fabriquer une autorisation ou lui attribuer une décision inexistante.
 
 DIEUX
 
@@ -80,11 +82,11 @@ Une Transgression est une classification, jamais un bypass. Elle ne permet jamai
 
 GOUVERNANCE
 
-Ordre et Chaos démarrent au niveau Observation. Permissions, niveau, budgets et sanctions sont distincts. Budgets persistants : miracle, legislative, favor, transgression_debt. Ledger append-only. Budget nul : proposition possible, exécution autonome normale interdite.
+Ordre, Chaos et le Héraut démarrent au niveau Observation. Permissions, niveau, budgets et sanctions sont distincts. Budgets persistants : miracle, legislative, favor, transgression_debt. Ledger append-only. Budget nul : proposition possible, exécution autonome normale interdite.
 
 Sanctions allowlistées : suspension, refus Miracle, refus Décret, gel budget Miracle, gel budget législatif, plafond de pouvoir.
 
-Aucune commande canonique ne permet à un dieu d'augmenter lui-même permissions, budget ou niveau, ni de retirer ses sanctions. L'administration passe par GovernanceAdminService et, tant que la migration Créateur/Héraut n'est pas codée, l'identité technique `father` représente le Créateur.
+Aucune commande canonique ne permet à un dieu de s'auto-attribuer permissions, budget ou niveau, ni de retirer ses sanctions. L'administration passe par GovernanceAdminService et seul `father`, représentant le Créateur, en est l'administrateur souverain actuel.
 
 Une proposition Observateur mutante exige observer.apply_proposal + permission finale + niveau/budget/sanctions valides.
 
