@@ -21,7 +21,7 @@ class WriterLeaseUnavailable(RuntimeError):
 
 
 class CanonicalWorldWorker:
-    """The only supported mutation path for the canonical world runtime."""
+    """Single-writer mutation path for the canonical world runtime."""
 
     def __init__(
         self,
@@ -70,15 +70,14 @@ class CanonicalWorldWorker:
                     continue
 
                 self.runtime.advance_to(command.created_at_utc)
+                world = self.repository.load_world()
                 try:
-                    result = self._apply_command(command)
+                    result = self._apply_to_world(world, command)
                 except (KeyError, TypeError, ValueError, PermissionError) as exc:
                     self.storage.mark_rejected(command.id, str(exc))
                     rejected += 1
                     continue
 
-                world = self.repository.load_world()
-                self._apply_to_world(world, command, result_only=False)
                 world._emit(
                     "command_applied",
                     payload={
@@ -111,21 +110,13 @@ class CanonicalWorldWorker:
         finally:
             self.storage.release_lease(holder_id=self.holder_id)
 
-    def _apply_command(self, command: RuntimeCommand) -> dict[str, Any]:
-        world = self.repository.load_world()
-        return self._apply_to_world(world, command, result_only=True)
-
     @staticmethod
-    def _apply_to_world(world, command: RuntimeCommand, *, result_only: bool) -> dict[str, Any]:
+    def _apply_to_world(world, command: RuntimeCommand) -> dict[str, Any]:
         payload = command.payload
         if command.command_type == "deposit_food":
             x = float(payload["x"])
             y = float(payload["y"])
             count = int(payload.get("count", 1))
-            if result_only:
-                if count < 1 or count > 100:
-                    raise ValueError("count must be in [1, 100]")
-                return {"count": count, "x": x, "y": y}
             food_ids = world.player_deposit_food(x, y, count)
             return {"food_ids": food_ids, "count": len(food_ids)}
 
@@ -136,9 +127,6 @@ class CanonicalWorldWorker:
             radius = payload.get("radius")
             if radius is not None:
                 radius = float(radius)
-            if result_only:
-                world._validate_signal(signal)
-                return {"signal": signal, "x": x, "y": y, "radius": radius}
             receivers = world.player_emit_signal(signal, x, y, radius=radius)
             return {"signal": signal, "receivers": receivers}
 
