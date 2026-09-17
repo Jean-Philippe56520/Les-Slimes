@@ -33,13 +33,15 @@ Toute mutation externe officielle suit :
 
 ```text
 acteur
-  -> permission
-  -> gouvernance
   -> command queue persistante
   -> CanonicalWorldWorker
+  -> GovernancePolicy
+       acteur actif + permission + niveau + sanctions + budget
   -> moteur Python
-  -> persistance
+  -> persistance atomique monde + intervention + budget + audit
 ```
+
+La gouvernance est vérifiée à l'exécution puis revalidée juste avant commit. Une commande peut donc être mise en queue puis rejetée si l'autorité a changé ; ce refus reste auditable.
 
 Les expériences, benchmarks et tests utilisent des copies/forks explicitement **non canoniques**, isolés et incapables d'écrire dans le monde officiel.
 
@@ -50,11 +52,13 @@ React + TypeScript + PixiJS / Netlify
                  |
                 API
                  |
-      Gouvernance + Command Queue
+        Command Queue persistante
                  |
        CanonicalWorldWorker Python
-        horloge + ticks + catch-up
-       writer unique + audit/fencing
+                 |
+        GovernancePolicy
+                 |
+         moteur Python World
                  |
         persistance canonique
       SQLite -> PostgreSQL durable
