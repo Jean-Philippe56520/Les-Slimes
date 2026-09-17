@@ -67,9 +67,7 @@ Google Drive : rapports/snapshots/journaux uniquement
 - `tick_duration_seconds` et métadonnées UTC ;
 - `CanonicalRuntime.advance_to(target_time)` ;
 - catch-up déterministe ;
-- writer lease exclusif ;
-- command queue SQLite ordonnée et idempotente ;
-- reprise après crash via événement `command_applied` ;
+- command queue SQLite ordonnée, idempotente et paginée ;
 - acteurs persistants et permissions ;
 - registre central de commandes ;
 - commandes nourriture, signal, règles comportementales et mystères ;
@@ -78,6 +76,16 @@ Google Drive : rapports/snapshots/journaux uniquement
 - CLI mutatif routé par queue/worker ;
 - Streamlit réduit à un Lab lecture/admin + enqueue ;
 - Observer Inbox sans mutation directe de `World` ;
+- forks scientifiques isolés et explicitement non canoniques ;
+- writer lease fenced avec token + génération ;
+- séparation temps simulé / wall-clock du processus ;
+- heartbeat réel entre batches et pendant l'idle ;
+- garde transactionnel empêchant un writer zombie de committer ;
+- `CanonicalWorkerService` pour boucle H24 sur hôte unique ;
+- `worker-run` et `worker-status` ;
+- health runtime : tick, retard, ticks dus, backlog et lease ;
+- reprise après crash via événement `command_applied` et takeover du lease ;
+- tests de concurrence et de digest crash/takeover == exécution continue ;
 - tests empêchant la réintroduction des principaux contournements.
 
 ## Moteur déjà présent
@@ -101,18 +109,20 @@ Jean-Philippe est le Père : budgets, récompenses, sanctions, permissions et Co
 
 Actuellement : SQLite transactionnel.
 
-Production future : PostgreSQL durable après validation. Supabase reste une option, pas une obligation.
+Le runtime SQLite est conçu pour un fonctionnement continu contrôlé sur un hôte unique. La production publique H24 demandera encore une persistance PostgreSQL durable, une supervision/orchestration du worker et une stratégie opérationnelle de sauvegarde/reprise.
+
+Supabase reste une option, pas une obligation.
 
 Google Drive n'est jamais utilisé comme base active.
 
 # Prochaines étapes
 
-1. formaliser les forks scientifiques non canoniques ;
-2. durcir le World Worker H24 : heartbeat réel, supervision, reprise, concurrence ;
-3. brancher budgets/sanctions/journaux divins ;
-4. construire l'API Python ;
-5. construire React + TypeScript + PixiJS ;
-6. migrer ensuite vers une persistance PostgreSQL de production ;
+1. brancher budgets/sanctions/journaux divins sur les permissions ;
+2. construire l'API Python ;
+3. construire React + TypeScript + PixiJS ;
+4. migrer vers une persistance PostgreSQL durable ;
+5. définir le déploiement et la supervision du worker canonique ;
+6. automatiser rapports/Drive ;
 7. créer Ordre/Chaos et leurs tâches planifiées lorsque la gouvernance est prête.
 
 Pour reprendre le projet, lire d'abord `docs/PROJECT_STATE.md` puis `docs/PROJECT_INSTRUCTIONS.md`.
