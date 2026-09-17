@@ -52,6 +52,21 @@ def _sqlite_columns(conn: Any, table_name: str) -> list[str]:
     return [str(row["name"]) for row in conn.execute(f"PRAGMA table_info({table_name})")]
 
 
+def _locked_source_digest(conn: Any) -> str:
+    tick_row = conn.execute("SELECT value FROM metadata WHERE key = 'tick'").fetchone()
+    if tick_row is None:
+        raise RuntimeError("Locked SQLite source is missing world tick metadata")
+    raw_tick = tick_row["value"]
+    tick = int(bytes(raw_tick).decode("ascii"))
+    checkpoint = conn.execute(
+        "SELECT state_digest FROM checkpoints WHERE tick = ?",
+        (tick,),
+    ).fetchone()
+    if checkpoint is None:
+        raise RuntimeError(f"Locked SQLite source has no checkpoint for tick {tick}")
+    return str(checkpoint["state_digest"])
+
+
 def migrate_sqlite_to_postgres(
     source: SQLiteRepository,
     target: PostgreSQLRepository,
@@ -77,8 +92,8 @@ def migrate_sqlite_to_postgres(
             f"Source canonical writer lease is still active for {lease.holder_id}; stop the worker first"
         )
 
-    # Bootstrap all target schemas from the source world, then replace every
-    # canonical table transactionally from one coherent SQLite snapshot.
+    # Bootstrap all target schemas from the source world. The actual source tables
+    # are then copied under one SQLite write lock and one PostgreSQL write transaction.
     source_world = source.load_world()
     source_digest = source_world.state_digest()
     target.save_world(source_world)
@@ -89,11 +104,7 @@ def migrate_sqlite_to_postgres(
     copied: dict[str, int] = {}
     with source._connect() as source_conn:
         source.begin_write(source_conn)
-        # Re-check the state after taking the SQLite write lock.
-        locked_world = source.load_world()
-        locked_digest = locked_world.state_digest()
-        if locked_digest != source_digest:
-            source_digest = locked_digest
+        source_digest = _locked_source_digest(source_conn)
 
         with target._connect() as target_conn:
             target.begin_write(target_conn)
