@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ..cognition.rules import validate_rule_payload
+from ..governance.models import BudgetKind, PowerLevel
 from ..world.engine import World
 from ..world.mysteries import validate_mystery_payload
 from .actors import ActorPermission
@@ -12,6 +13,9 @@ from .actors import ActorPermission
 @dataclass(frozen=True, slots=True)
 class CommandDefinition:
     permission: ActorPermission
+    power_level: PowerLevel
+    budget_kind: BudgetKind
+    budget_cost: int
     validate: Callable[[dict[str, Any]], None]
     apply: Callable[[World, dict[str, Any], str, int | None], dict[str, Any]]
 
@@ -31,17 +35,8 @@ def _validate_deposit_food(payload: dict[str, Any]) -> None:
         raise ValueError("count must be an integer in [1, 100]")
 
 
-def _apply_deposit_food(
-    world: World,
-    payload: dict[str, Any],
-    actor_id: str,
-    source_proposal_id: int | None,
-) -> dict[str, Any]:
-    food_ids = world.player_deposit_food(
-        float(payload["x"]),
-        float(payload["y"]),
-        int(payload.get("count", 1)),
-    )
+def _apply_deposit_food(world: World, payload: dict[str, Any], actor_id: str, source_proposal_id: int | None) -> dict[str, Any]:
+    food_ids = world.player_deposit_food(float(payload["x"]), float(payload["y"]), int(payload.get("count", 1)))
     return {"food_ids": food_ids, "count": len(food_ids)}
 
 
@@ -55,17 +50,10 @@ def _validate_emit_signal(payload: dict[str, Any]) -> None:
         _require_number(payload, "radius")
 
 
-def _apply_emit_signal(
-    world: World,
-    payload: dict[str, Any],
-    actor_id: str,
-    source_proposal_id: int | None,
-) -> dict[str, Any]:
+def _apply_emit_signal(world: World, payload: dict[str, Any], actor_id: str, source_proposal_id: int | None) -> dict[str, Any]:
     radius = payload.get("radius")
     receivers = world.player_emit_signal(
-        str(payload["signal"]),
-        float(payload["x"]),
-        float(payload["y"]),
+        str(payload["signal"]), float(payload["x"]), float(payload["y"]),
         radius=float(radius) if radius is not None else None,
     )
     return {"signal": str(payload["signal"]), "receivers": receivers}
@@ -78,12 +66,7 @@ def _validate_add_behavior_rule(payload: dict[str, Any]) -> None:
     validate_rule_payload(rule, require_id=False)
 
 
-def _apply_add_behavior_rule(
-    world: World,
-    payload: dict[str, Any],
-    actor_id: str,
-    source_proposal_id: int | None,
-) -> dict[str, Any]:
+def _apply_add_behavior_rule(world: World, payload: dict[str, Any], actor_id: str, source_proposal_id: int | None) -> dict[str, Any]:
     source = "observer" if source_proposal_id is not None else actor_id
     rule = world.add_behavior_rule(dict(payload["rule"]), source=source)
     return {"rule_id": rule.id}
@@ -95,12 +78,7 @@ def _validate_remove_behavior_rule(payload: dict[str, Any]) -> None:
         raise ValueError("remove_behavior_rule requires payload.rule_id")
 
 
-def _apply_remove_behavior_rule(
-    world: World,
-    payload: dict[str, Any],
-    actor_id: str,
-    source_proposal_id: int | None,
-) -> dict[str, Any]:
+def _apply_remove_behavior_rule(world: World, payload: dict[str, Any], actor_id: str, source_proposal_id: int | None) -> dict[str, Any]:
     rule_id = str(payload["rule_id"])
     world.remove_behavior_rule(rule_id)
     return {"rule_id": rule_id}
@@ -113,12 +91,7 @@ def _validate_add_mystery(payload: dict[str, Any]) -> None:
     validate_mystery_payload(mystery, require_id=False)
 
 
-def _apply_add_mystery(
-    world: World,
-    payload: dict[str, Any],
-    actor_id: str,
-    source_proposal_id: int | None,
-) -> dict[str, Any]:
+def _apply_add_mystery(world: World, payload: dict[str, Any], actor_id: str, source_proposal_id: int | None) -> dict[str, Any]:
     source = "observer" if source_proposal_id is not None else actor_id
     mystery = world.add_mystery(dict(payload["mystery"]), source=source)
     return {"mystery_id": mystery.id}
@@ -130,48 +103,19 @@ def _validate_remove_mystery(payload: dict[str, Any]) -> None:
         raise ValueError("remove_mystery requires payload.mystery_id")
 
 
-def _apply_remove_mystery(
-    world: World,
-    payload: dict[str, Any],
-    actor_id: str,
-    source_proposal_id: int | None,
-) -> dict[str, Any]:
+def _apply_remove_mystery(world: World, payload: dict[str, Any], actor_id: str, source_proposal_id: int | None) -> dict[str, Any]:
     mystery_id = str(payload["mystery_id"])
     world.remove_mystery(mystery_id)
     return {"mystery_id": mystery_id}
 
 
 COMMANDS: dict[str, CommandDefinition] = {
-    "deposit_food": CommandDefinition(
-        ActorPermission.DEPOSIT_FOOD,
-        _validate_deposit_food,
-        _apply_deposit_food,
-    ),
-    "emit_signal": CommandDefinition(
-        ActorPermission.EMIT_SIGNAL,
-        _validate_emit_signal,
-        _apply_emit_signal,
-    ),
-    "add_behavior_rule": CommandDefinition(
-        ActorPermission.ADD_BEHAVIOR_RULE,
-        _validate_add_behavior_rule,
-        _apply_add_behavior_rule,
-    ),
-    "remove_behavior_rule": CommandDefinition(
-        ActorPermission.REMOVE_BEHAVIOR_RULE,
-        _validate_remove_behavior_rule,
-        _apply_remove_behavior_rule,
-    ),
-    "add_mystery": CommandDefinition(
-        ActorPermission.ADD_MYSTERY,
-        _validate_add_mystery,
-        _apply_add_mystery,
-    ),
-    "remove_mystery": CommandDefinition(
-        ActorPermission.REMOVE_MYSTERY,
-        _validate_remove_mystery,
-        _apply_remove_mystery,
-    ),
+    "deposit_food": CommandDefinition(ActorPermission.DEPOSIT_FOOD, PowerLevel.MIRACLE, BudgetKind.MIRACLE, 1, _validate_deposit_food, _apply_deposit_food),
+    "emit_signal": CommandDefinition(ActorPermission.EMIT_SIGNAL, PowerLevel.MIRACLE, BudgetKind.MIRACLE, 1, _validate_emit_signal, _apply_emit_signal),
+    "add_behavior_rule": CommandDefinition(ActorPermission.ADD_BEHAVIOR_RULE, PowerLevel.DECREE, BudgetKind.LEGISLATIVE, 1, _validate_add_behavior_rule, _apply_add_behavior_rule),
+    "remove_behavior_rule": CommandDefinition(ActorPermission.REMOVE_BEHAVIOR_RULE, PowerLevel.DECREE, BudgetKind.LEGISLATIVE, 1, _validate_remove_behavior_rule, _apply_remove_behavior_rule),
+    "add_mystery": CommandDefinition(ActorPermission.ADD_MYSTERY, PowerLevel.MIRACLE, BudgetKind.MIRACLE, 1, _validate_add_mystery, _apply_add_mystery),
+    "remove_mystery": CommandDefinition(ActorPermission.REMOVE_MYSTERY, PowerLevel.MIRACLE, BudgetKind.MIRACLE, 1, _validate_remove_mystery, _apply_remove_mystery),
 }
 
 
@@ -192,14 +136,7 @@ def validate_command_payload(command_type: str, payload: dict[str, Any]) -> None
     get_command_definition(command_type).validate(payload)
 
 
-def apply_command(
-    world: World,
-    *,
-    command_type: str,
-    payload: dict[str, Any],
-    actor_id: str,
-    source_proposal_id: int | None = None,
-) -> dict[str, Any]:
+def apply_command(world: World, *, command_type: str, payload: dict[str, Any], actor_id: str, source_proposal_id: int | None = None) -> dict[str, Any]:
     definition = get_command_definition(command_type)
     definition.validate(payload)
     return definition.apply(world, payload, actor_id, source_proposal_id)
