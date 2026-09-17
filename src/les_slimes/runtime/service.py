@@ -131,7 +131,7 @@ class CanonicalWorkerService:
         lease = self.worker.storage.current_lease()
         lease_valid = bool(lease is not None and lease.expires_at_utc > now)
         return WorkerHealth(
-            holder_id=self.holder_id,
+            holder_id=lease.holder_id if lease_valid and lease is not None else self.holder_id,
             lease_generation=lease.generation if lease else None,
             lease_expires_at_utc=lease.expires_at_utc if lease else None,
             lease_valid=lease_valid,
@@ -144,20 +144,22 @@ class CanonicalWorkerService:
             oldest_pending_command_utc=self.worker.storage.oldest_pending_command_utc(),
         )
 
+    def _idle_with_heartbeats(self, *, stop_requested: Callable[[], bool]) -> None:
+        remaining = self.config.poll_interval_seconds
+        while remaining > 0 and not stop_requested():
+            sleep_for = min(remaining, self.config.heartbeat_interval_seconds)
+            self.clock.sleep(sleep_for)
+            remaining -= sleep_for
+            if not stop_requested():
+                self.heartbeat()
+
     def serve(self, *, stop_requested: Callable[[], bool]) -> None:
         self.start()
-        last_heartbeat = self.clock.now().astimezone(UTC)
         try:
             while not stop_requested():
                 self.cycle()
-                now = self.clock.now().astimezone(UTC)
-                if (
-                    now - last_heartbeat
-                ).total_seconds() >= self.config.heartbeat_interval_seconds:
-                    self.heartbeat()
-                    last_heartbeat = now
                 if stop_requested():
                     break
-                self.clock.sleep(self.config.poll_interval_seconds)
+                self._idle_with_heartbeats(stop_requested=stop_requested)
         finally:
             self.close()
