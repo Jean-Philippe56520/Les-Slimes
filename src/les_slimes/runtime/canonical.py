@@ -133,6 +133,15 @@ class CanonicalRuntime:
             self._write(reconciled)
         return reconciled
 
+    def inspect_metadata(self) -> RuntimeMetadata:
+        persisted = self._read()
+        if persisted is None:
+            raise RuntimeError("Canonical runtime is not initialized")
+        world = self.repository.load_world()
+        if persisted.tick_duration_seconds != world.config.tick_duration_seconds:
+            raise RuntimeError("Canonical tick duration differs from world configuration")
+        return self._for_world(world, persisted.world_started_at_utc)
+
     def metadata(self) -> RuntimeMetadata:
         persisted = self._read()
         if persisted is None:
