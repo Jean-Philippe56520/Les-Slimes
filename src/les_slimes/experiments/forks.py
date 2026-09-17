@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..database.base import RelationalRepository
 from ..database.scope import (
     PersistenceScope,
     PersistenceScopeError,
@@ -17,6 +18,7 @@ from ..database.scope import (
     set_persistence_scope,
 )
 from ..database.sqlite_repo import SQLiteRepository
+from ..world.engine import World
 
 
 _MANIFEST_KEY = "experiment_manifest"
@@ -82,8 +84,34 @@ def _readonly_sqlite_backup(source: Path, destination: Path) -> None:
         src.backup(dst)
 
 
+def _snapshot_canonical_world(source_repository: RelationalRepository) -> World:
+    """Read one coherent canonical world snapshot without copying governance.
+
+    SQLite uses its native backup API. Other relational backends take the canonical
+    write lock while reading the world through a separate read transaction. This
+    prevents a world save from interleaving with the snapshot while leaving the
+    resulting experiment isolated in a new SQLite database.
+    """
+
+    require_persistence_scope(source_repository, PersistenceScope.CANONICAL)
+    if isinstance(source_repository, SQLiteRepository) and source_repository.backend_name == "sqlite":
+        with tempfile.TemporaryDirectory(prefix="les-slimes-snapshot-") as tmpdir:
+            snapshot_path = Path(tmpdir) / "canonical_snapshot.sqlite"
+            _readonly_sqlite_backup(source_repository.path, snapshot_path)
+            snapshot_repo = SQLiteRepository(snapshot_path)
+            require_persistence_scope(snapshot_repo, PersistenceScope.CANONICAL)
+            return snapshot_repo.load_world()
+
+    with source_repository._connect() as guard_conn:
+        source_repository.begin_write(guard_conn)
+        try:
+            return source_repository.load_world()
+        finally:
+            guard_conn.rollback()
+
+
 def create_experiment_fork(
-    source_repository: SQLiteRepository,
+    source_repository: RelationalRepository,
     destination: str | Path,
     *,
     experiment_id: str,
@@ -97,22 +125,21 @@ def create_experiment_fork(
 
     require_persistence_scope(source_repository, PersistenceScope.CANONICAL)
     destination_path = Path(destination)
-    if destination_path.resolve() == source_repository.path.resolve():
+    if (
+        isinstance(source_repository, SQLiteRepository)
+        and source_repository.backend_name == "sqlite"
+        and destination_path.resolve() == source_repository.path.resolve()
+    ):
         raise ValueError("Experiment destination must differ from canonical database")
     if destination_path.exists():
         raise FileExistsError(destination_path)
     destination_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix="les-slimes-snapshot-") as tmpdir:
-        snapshot_path = Path(tmpdir) / "canonical_snapshot.sqlite"
-        _readonly_sqlite_backup(source_repository.path, snapshot_path)
-        snapshot_repo = SQLiteRepository(snapshot_path)
-        require_persistence_scope(snapshot_repo, PersistenceScope.CANONICAL)
-        source_world = snapshot_repo.load_world()
-        source_tick = source_world.tick
-        source_event_sequence = source_world.event_sequence
-        source_digest = source_world.state_digest()
-        source_config = source_world.config.to_dict()
+    source_world = _snapshot_canonical_world(source_repository)
+    source_tick = source_world.tick
+    source_event_sequence = source_world.event_sequence
+    source_digest = source_world.state_digest()
+    source_config = source_world.config.to_dict()
 
     experiment_repo = SQLiteRepository(destination_path)
     set_persistence_scope(experiment_repo, PersistenceScope.NON_CANONICAL_EXPERIMENT)
@@ -165,5 +192,5 @@ def run_experiment_fork(
     return updated
 
 
-def is_canonical_repository(repository: SQLiteRepository) -> bool:
+def is_canonical_repository(repository: RelationalRepository) -> bool:
     return get_persistence_scope(repository) == PersistenceScope.CANONICAL
