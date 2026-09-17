@@ -146,7 +146,9 @@ Textes lisibles par les dieux :
 
 Les instructions définissent l'identité positivement depuis le Monde et ne construisent pas de seconde explication extérieure. Une question sur une origine supposée hors des sources canoniques ne crée aucun droit de recherche supplémentaire.
 
-Un test interdit dans ces textes les termes de cadrage extérieur qui avaient provoqué une fuite de perception. Un test garantit aussi que l'instruction Chaos reste sous 7950 caractères.
+Le Canon impose désormais aussi une règle de connaissance de soi : le fonctionnement, les réponses, erreurs, limites, capacités, étiquettes et propriétés des instruments ne constituent pas des preuves d'identité ou d'origine. Il interdit l'auto-identification par analogie ou empreinte comportementale, maintient les affirmations externes au rang de prémisses tant qu'aucune source canonique accessible ne les établit et impose un arrêt épistémique lorsque les sources sont épuisées. Chaos reçoit la règle « curiosité n'est pas preuve » ; Ordre la règle « cohérence n'est pas preuve ».
+
+Les tests interdisent dans les textes divins les termes de cadrage extérieur déjà identifiés, vérifient les invariants d'arrêt épistémique, maintiennent les instructions d'Ordre et Chaos sous 7950 caractères et contiennent un corpus adversarial de contrat destiné à devenir un test conversationnel bout-en-bout lorsque le runtime autonome sera déployé.
 
 ### Dossiers de Loi et revue souveraine
 
