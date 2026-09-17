@@ -92,8 +92,6 @@ def migrate_sqlite_to_postgres(
             f"Source canonical writer lease is still active for {lease.holder_id}; stop the worker first"
         )
 
-    # Bootstrap all target schemas from the source world. The actual source tables
-    # are then copied under one SQLite write lock and one PostgreSQL write transaction.
     source_world = source.load_world()
     source_digest = source_world.state_digest()
     target.save_world(source_world)
@@ -102,9 +100,14 @@ def migrate_sqlite_to_postgres(
     ensure_governance_invariants(target)
 
     copied: dict[str, int] = {}
+    locked_source_pending = 0
     with source._connect() as source_conn:
         source.begin_write(source_conn)
         source_digest = _locked_source_digest(source_conn)
+        pending_row = source_conn.execute(
+            "SELECT COUNT(*) AS count FROM runtime_commands WHERE status = 'pending'"
+        ).fetchone()
+        locked_source_pending = int(pending_row["count"]) if pending_row is not None else 0
 
         with target._connect() as target_conn:
             target.begin_write(target_conn)
@@ -148,11 +151,11 @@ def migrate_sqlite_to_postgres(
     target_runtime = RuntimeStorage(target)
     if target_runtime.current_lease() is not None:
         raise RuntimeError("Target writer lease must be empty after migration")
-    source_pending = source_runtime.pending_command_count()
     target_pending = target_runtime.pending_command_count()
-    if source_pending != target_pending:
+    if locked_source_pending != target_pending:
         raise RuntimeError(
-            f"Pending command mismatch after migration: {source_pending} != {target_pending}"
+            "Pending command mismatch after migration: "
+            f"{locked_source_pending} != {target_pending}"
         )
 
     source_governance = GovernanceStorage(source)
