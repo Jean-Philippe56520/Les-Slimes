@@ -1,28 +1,23 @@
 # Gouvernance divine
 
-Ce document définit la gouvernance cible des agents IA de Les Slimes. Le code actuel implémente encore principalement un Observateur allowlisté ; cette architecture sera construite progressivement.
+Ce document définit la gouvernance cible des agents IA de Les Slimes.
 
 ## Périmètre Git
 
 Repo unique autorisé : `Jean-Philippe56520/Les-Slimes`.
-Toutes les opérations GitHub préparant ou réalisant une modification doivent rester limitées à ce dépôt. Les autres repos ne font pas partie de l'univers Les Slimes.
+Toutes les opérations GitHub doivent rester limitées à ce dépôt.
 
 ## Monde canonique
 
 Il existe un seul monde Les Slimes canonique, persistant et partagé par les Slimes, le Père et tous les dieux.
 
-Il possède :
-- une seule horloge canonique ;
-- un seul état officiel ;
-- une seule histoire ;
-- une seule chaîne de commandes ;
-- une seule persistance active à un instant donné.
+Il possède une seule horloge, un seul état officiel, une seule histoire, une seule chaîne de commandes et une seule persistance active.
 
-Le monde canonique ne change jamais de « mode ».
+Le monde canonique ne change jamais de mode. Les anciens modes globaux ont été supprimés.
+
+Toute mutation externe officielle passe par : acteur -> permission -> command queue persistante -> `CanonicalWorldWorker` -> moteur Python -> persistance.
 
 Les restrictions portent sur les permissions, budgets et sanctions des acteurs. Les expériences, benchmarks et tests utilisent des forks explicitement non canoniques, isolés et incapables d'écrire dans le monde réel.
-
-Les modes `sandbox`, `observation` et `experiment` encore présents dans le code sont un héritage du laboratoire actuel à refactorer ; ils ne représentent pas l'architecture finale.
 
 ## Acteurs initiaux
 
@@ -45,7 +40,7 @@ Jean-Philippe est le Père. Il peut attribuer/retirer budgets et pouvoirs, réco
 ## Pouvoirs
 
 1. Observation : lecture et analyse.
-2. Miracle : primitive déjà prévue par le moteur.
+2. Miracle : commande allowlistée déjà prévue par le moteur.
 3. Décret : règle déclarative utilisant le DSL existant.
 4. Loi : modification limitée du moteur Python, normalement couverte par budget législatif.
 5. Transgression : modification interne hors budget/autorité, rare, attribuée, journalisée, réversible et sanctionnable.
@@ -63,7 +58,7 @@ Aucun dieu ne peut :
 - pousser secrets, clés, `.env`, credentials ou tokens ;
 - réécrire l'historique Git ;
 - modifier les garde-fous pour augmenter ses droits ;
-- écrire directement dans la base active en contournant le moteur/command queue.
+- écrire directement dans la base active en contournant command queue + worker.
 
 ## Branches divines
 
@@ -101,7 +96,6 @@ Chaque dieu :
 ### Conseil hebdomadaire
 
 Chaque dieu relit 7 jours, examine propositions et conséquences, lit les arguments de l'autre, soutient/refuse/amende et saisit éventuellement le Père.
-Les horaires seront décalés.
 
 ## Science
 
