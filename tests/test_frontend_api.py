@@ -9,7 +9,7 @@ from les_slimes.runtime import CanonicalRuntime
 from les_slimes.world.engine import World
 
 
-def build_client(tmp_path):
+def build_client(tmp_path, monkeypatch):
     repo = SQLiteRepository(tmp_path / "frontend.sqlite")
     repo.save_world(
         World(
@@ -26,12 +26,13 @@ def build_client(tmp_path):
         )
     )
     CanonicalRuntime(repo).ensure_initialized(datetime(2026, 9, 17, 12, 0, tzinfo=UTC))
-    app = create_app(repo, cors_origins=["https://les-slimes.example"])
+    monkeypatch.setenv("LES_SLIMES_CORS_ORIGINS", "https://les-slimes.example")
+    app = create_app(repo)
     return repo, TestClient(app)
 
 
-def test_frontend_world_projections_are_read_only(tmp_path):
-    repo, client = build_client(tmp_path)
+def test_frontend_world_projections_are_read_only(tmp_path, monkeypatch):
+    repo, client = build_client(tmp_path, monkeypatch)
     before = repo.load_world().state_digest()
 
     world = client.get("/world")
@@ -49,8 +50,8 @@ def test_frontend_world_projections_are_read_only(tmp_path):
     assert repo.load_world().state_digest() == before
 
 
-def test_frontend_cors_is_explicitly_allowlisted(tmp_path):
-    _repo, client = build_client(tmp_path)
+def test_frontend_cors_is_explicitly_allowlisted(tmp_path, monkeypatch):
+    _repo, client = build_client(tmp_path, monkeypatch)
 
     allowed = client.options(
         "/world",
