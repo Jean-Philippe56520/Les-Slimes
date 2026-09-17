@@ -4,7 +4,8 @@ import pytest
 
 from les_slimes.config import WorldConfig
 from les_slimes.database.sqlite_repo import SQLiteRepository
-from les_slimes.governance import BudgetKind, GovernanceAdminService, PowerLevel
+from les_slimes.governance.models import BudgetKind, PowerLevel
+from les_slimes.governance.service import GovernanceAdminService
 from les_slimes.runtime import ActorPermission, CanonicalRuntime, CanonicalWorldWorker, RuntimeStorage
 from les_slimes.world.engine import World
 
@@ -70,8 +71,14 @@ def test_permission_alone_does_not_enable_actor_command(tmp_path):
     repo = build_repo(tmp_path)
     start = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
     CanonicalRuntime(repo).ensure_initialized(start)
+    admin = GovernanceAdminService(repo)
+    admin.set_permissions(
+        "order",
+        [ActorPermission.DEPOSIT_FOOD],
+        reason="permission-only test",
+        now_utc=start,
+    )
     storage = RuntimeStorage(repo)
-    storage.set_actor_permissions("order", [ActorPermission.DEPOSIT_FOOD])
     initial_next_food_id = repo.load_world().next_food_id
 
     storage.enqueue_command(
