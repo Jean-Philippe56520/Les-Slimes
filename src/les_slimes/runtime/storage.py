@@ -35,6 +35,8 @@ ON runtime_commands(status, sequence);
 CREATE TABLE IF NOT EXISTS runtime_writer_lease (
     lease_name TEXT PRIMARY KEY,
     holder_id TEXT NOT NULL,
+    lease_token TEXT,
+    generation INTEGER NOT NULL DEFAULT 0,
     acquired_at_utc TEXT NOT NULL,
     heartbeat_at_utc TEXT NOT NULL,
     expires_at_utc TEXT NOT NULL
@@ -63,6 +65,21 @@ class RuntimeCommand:
     created_at_utc: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class WriterLease:
+    lease_name: str
+    holder_id: str
+    lease_token: str
+    generation: int
+    acquired_at_utc: datetime
+    heartbeat_at_utc: datetime
+    expires_at_utc: datetime
+
+
+class WriterLeaseLost(RuntimeError):
+    pass
+
+
 class RuntimeStorage:
     def __init__(self, repository: SQLiteRepository) -> None:
         ensure_canonical_scope(repository)
@@ -88,6 +105,21 @@ class RuntimeStorage:
             }
             if "source_proposal_id" not in command_columns:
                 conn.execute("ALTER TABLE runtime_commands ADD COLUMN source_proposal_id INTEGER")
+
+            lease_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(runtime_writer_lease)")
+            }
+            if "lease_token" not in lease_columns:
+                conn.execute("ALTER TABLE runtime_writer_lease ADD COLUMN lease_token TEXT")
+            if "generation" not in lease_columns:
+                conn.execute(
+                    "ALTER TABLE runtime_writer_lease ADD COLUMN generation INTEGER NOT NULL DEFAULT 0"
+                )
+            conn.execute(
+                "UPDATE runtime_writer_lease SET lease_token = ? WHERE lease_token IS NULL",
+                (f"legacy:{uuid.uuid4().hex}",),
+            )
+
             for actor in DEFAULT_ACTORS:
                 conn.execute(
                     """
@@ -241,6 +273,45 @@ class RuntimeStorage:
             ).fetchall()
         return [self._row_to_command(row) for row in rows]
 
+    def pending_commands_due(
+        self,
+        target_utc: datetime,
+        *,
+        limit: int = 1000,
+    ) -> list[RuntimeCommand]:
+        if limit < 1:
+            return []
+        target = self._utc(target_utc)
+        with self.repository._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM runtime_commands
+                WHERE status = 'pending' AND created_at_utc <= ?
+                ORDER BY sequence ASC
+                LIMIT ?
+                """,
+                (target.isoformat(), limit),
+            ).fetchall()
+        return [self._row_to_command(row) for row in rows]
+
+    def pending_command_count(self) -> int:
+        with self.repository._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM runtime_commands WHERE status = 'pending'"
+            ).fetchone()
+        return int(row["count"])
+
+    def oldest_pending_command_utc(self) -> datetime | None:
+        with self.repository._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT created_at_utc FROM runtime_commands
+                WHERE status = 'pending'
+                ORDER BY sequence ASC LIMIT 1
+                """
+            ).fetchone()
+        return self._parse_dt(row["created_at_utc"]) if row else None
+
     def recent_commands(self, *, limit: int = 100) -> list[sqlite3.Row]:
         with self.repository._connect() as conn:
             return conn.execute(
@@ -297,53 +368,74 @@ class RuntimeStorage:
         now_utc: datetime,
         ttl_seconds: float = 30.0,
         lease_name: str = "canonical_world_writer",
-    ) -> bool:
+    ) -> WriterLease | None:
         if not holder_id or ttl_seconds <= 0:
             raise ValueError("holder_id and positive ttl_seconds are required")
         now = self._utc(now_utc)
         expires = now + timedelta(seconds=ttl_seconds)
+        token = uuid.uuid4().hex
         with self.repository._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
                 "SELECT * FROM runtime_writer_lease WHERE lease_name = ?",
                 (lease_name,),
             ).fetchone()
-            can_take = (
-                row is None
-                or row["holder_id"] == holder_id
-                or self._parse_dt(row["expires_at_utc"]) <= now
+            if row is not None and self._parse_dt(row["expires_at_utc"]) > now:
+                conn.rollback()
+                return None
+            generation = (int(row["generation"]) if row is not None else 0) + 1
+            conn.execute(
+                """
+                INSERT INTO runtime_writer_lease(
+                    lease_name, holder_id, lease_token, generation,
+                    acquired_at_utc, heartbeat_at_utc, expires_at_utc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(lease_name) DO UPDATE SET
+                    holder_id = excluded.holder_id,
+                    lease_token = excluded.lease_token,
+                    generation = excluded.generation,
+                    acquired_at_utc = excluded.acquired_at_utc,
+                    heartbeat_at_utc = excluded.heartbeat_at_utc,
+                    expires_at_utc = excluded.expires_at_utc
+                """,
+                (
+                    lease_name,
+                    holder_id,
+                    token,
+                    generation,
+                    now.isoformat(),
+                    now.isoformat(),
+                    expires.isoformat(),
+                ),
             )
-            if can_take:
-                conn.execute(
-                    """
-                    INSERT INTO runtime_writer_lease(
-                        lease_name, holder_id, acquired_at_utc, heartbeat_at_utc, expires_at_utc
-                    ) VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(lease_name) DO UPDATE SET
-                        holder_id = excluded.holder_id,
-                        acquired_at_utc = excluded.acquired_at_utc,
-                        heartbeat_at_utc = excluded.heartbeat_at_utc,
-                        expires_at_utc = excluded.expires_at_utc
-                    """,
-                    (
-                        lease_name,
-                        holder_id,
-                        now.isoformat(),
-                        now.isoformat(),
-                        expires.isoformat(),
-                    ),
-                )
             conn.commit()
-        return can_take
+        return WriterLease(
+            lease_name=lease_name,
+            holder_id=holder_id,
+            lease_token=token,
+            generation=generation,
+            acquired_at_utc=now,
+            heartbeat_at_utc=now,
+            expires_at_utc=expires,
+        )
+
+    def current_lease(
+        self,
+        lease_name: str = "canonical_world_writer",
+    ) -> WriterLease | None:
+        with self.repository._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM runtime_writer_lease WHERE lease_name = ?", (lease_name,)
+            ).fetchone()
+        return self._row_to_lease(row) if row is not None else None
 
     def heartbeat_lease(
         self,
+        lease: WriterLease,
         *,
-        holder_id: str,
         now_utc: datetime,
         ttl_seconds: float = 30.0,
-        lease_name: str = "canonical_world_writer",
-    ) -> bool:
+    ) -> WriterLease:
         now = self._utc(now_utc)
         expires = now + timedelta(seconds=ttl_seconds)
         with self.repository._connect() as conn:
@@ -352,24 +444,73 @@ class RuntimeStorage:
                 UPDATE runtime_writer_lease
                 SET heartbeat_at_utc = ?, expires_at_utc = ?
                 WHERE lease_name = ? AND holder_id = ?
+                  AND lease_token = ? AND generation = ?
+                  AND expires_at_utc > ?
                 """,
-                (now.isoformat(), expires.isoformat(), lease_name, holder_id),
+                (
+                    now.isoformat(),
+                    expires.isoformat(),
+                    lease.lease_name,
+                    lease.holder_id,
+                    lease.lease_token,
+                    lease.generation,
+                    now.isoformat(),
+                ),
             )
             conn.commit()
-        return cursor.rowcount == 1
+        if cursor.rowcount != 1:
+            raise WriterLeaseLost("Canonical writer lease was lost")
+        return WriterLease(
+            lease_name=lease.lease_name,
+            holder_id=lease.holder_id,
+            lease_token=lease.lease_token,
+            generation=lease.generation,
+            acquired_at_utc=lease.acquired_at_utc,
+            heartbeat_at_utc=now,
+            expires_at_utc=expires,
+        )
 
-    def release_lease(
-        self,
-        *,
-        holder_id: str,
-        lease_name: str = "canonical_world_writer",
-    ) -> None:
+    def release_lease(self, lease: WriterLease) -> None:
         with self.repository._connect() as conn:
             conn.execute(
-                "DELETE FROM runtime_writer_lease WHERE lease_name = ? AND holder_id = ?",
-                (lease_name, holder_id),
+                """
+                DELETE FROM runtime_writer_lease
+                WHERE lease_name = ? AND holder_id = ?
+                  AND lease_token = ? AND generation = ?
+                """,
+                (
+                    lease.lease_name,
+                    lease.holder_id,
+                    lease.lease_token,
+                    lease.generation,
+                ),
             )
             conn.commit()
+
+    def assert_lease_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        lease: WriterLease,
+        *,
+        now_utc: datetime,
+    ) -> None:
+        now = self._utc(now_utc)
+        row = conn.execute(
+            """
+            SELECT holder_id, lease_token, generation, expires_at_utc
+            FROM runtime_writer_lease WHERE lease_name = ?
+            """,
+            (lease.lease_name,),
+        ).fetchone()
+        valid = (
+            row is not None
+            and row["holder_id"] == lease.holder_id
+            and row["lease_token"] == lease.lease_token
+            and int(row["generation"]) == lease.generation
+            and self._parse_dt(row["expires_at_utc"]) > now
+        )
+        if not valid:
+            raise WriterLeaseLost("Canonical writer lease is no longer valid")
 
     def _row_to_actor(self, row: sqlite3.Row) -> RuntimeActor:
         return RuntimeActor(
@@ -393,4 +534,15 @@ class RuntimeStorage:
             ),
             status=str(row["status"]),
             created_at_utc=self._parse_dt(row["created_at_utc"]),
+        )
+
+    def _row_to_lease(self, row: sqlite3.Row) -> WriterLease:
+        return WriterLease(
+            lease_name=str(row["lease_name"]),
+            holder_id=str(row["holder_id"]),
+            lease_token=str(row["lease_token"]),
+            generation=int(row["generation"]),
+            acquired_at_utc=self._parse_dt(row["acquired_at_utc"]),
+            heartbeat_at_utc=self._parse_dt(row["heartbeat_at_utc"]),
+            expires_at_utc=self._parse_dt(row["expires_at_utc"]),
         )

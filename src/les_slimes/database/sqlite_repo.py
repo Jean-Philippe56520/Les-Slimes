@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import Callable
 
 from ..biology.genetics import Genome
 from ..cognition.memory import FoodMemory
@@ -196,7 +197,13 @@ class SQLiteRepository:
     def _int_bytes(value: int) -> bytes:
         return str(value).encode("ascii")
 
-    def save_world(self, world: World) -> None:
+    def save_world(
+        self,
+        world: World,
+        *,
+        transaction_guard: Callable[[sqlite3.Connection], None] | None = None,
+        transaction_mutator: Callable[[sqlite3.Connection], None] | None = None,
+    ) -> None:
         self.initialize_schema()
         cfg_json = json.dumps(world.config.to_dict(), sort_keys=True).encode("utf-8")
         metrics = world.metrics()
@@ -204,6 +211,8 @@ class SQLiteRepository:
 
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            if transaction_guard is not None:
+                transaction_guard(conn)
 
             self._set_meta(conn, "config", cfg_json)
             conn.execute("DELETE FROM metadata WHERE key='mode'")
@@ -413,6 +422,8 @@ class SQLiteRepository:
                     digest,
                 ),
             )
+            if transaction_mutator is not None:
+                transaction_mutator(conn)
             conn.commit()
 
         world.pending_events.clear()
