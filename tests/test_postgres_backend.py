@@ -8,9 +8,11 @@ import pytest
 psycopg = pytest.importorskip("psycopg")
 
 from les_slimes.config import WorldConfig
+from les_slimes.database.migrate import migrate_sqlite_to_postgres
 from les_slimes.database.postgres_repo import PostgreSQLRepository
-from les_slimes.governance.models import BudgetKind, PowerLevel
-from les_slimes.governance.service import GovernanceAdminService
+from les_slimes.database.sqlite_repo import SQLiteRepository
+from les_slimes.governance.models import BudgetKind, JournalEntryType, PowerLevel
+from les_slimes.governance.service import DivineGovernanceService, GovernanceAdminService
 from les_slimes.governance.storage import GovernanceStorage
 from les_slimes.runtime import ActorPermission, CanonicalRuntime, CanonicalWorldWorker, RuntimeStorage
 from les_slimes.world.engine import World
@@ -26,12 +28,10 @@ def _reset_database() -> None:
         conn.execute("CREATE SCHEMA public")
 
 
-def _repo() -> PostgreSQLRepository:
-    _reset_database()
-    repo = PostgreSQLRepository(TEST_DSN)
+def _world(seed: int = 7721) -> World:
     world = World(
         WorldConfig(
-            seed=7721,
+            seed=seed,
             width=35.0,
             height=24.0,
             initial_slimes=8,
@@ -42,7 +42,13 @@ def _repo() -> PostgreSQLRepository:
         )
     )
     world.step(12)
-    repo.save_world(world)
+    return world
+
+
+def _repo() -> PostgreSQLRepository:
+    _reset_database()
+    repo = PostgreSQLRepository(TEST_DSN)
+    repo.save_world(_world())
     return repo
 
 
@@ -161,3 +167,54 @@ def test_postgres_terminal_intervention_guard_is_enforced_by_database():
             conn.commit()
 
     assert governance.get_intervention(intervention.id).status == "rejected"
+
+
+def test_sqlite_to_postgres_migration_preserves_world_runtime_and_governance(tmp_path):
+    _reset_database()
+    source = SQLiteRepository(tmp_path / "source.sqlite")
+    source.save_world(_world(seed=8822))
+    start = datetime(2026, 9, 17, 13, 0, tzinfo=UTC)
+    CanonicalRuntime(source).ensure_initialized(start)
+    runtime = RuntimeStorage(source)
+    admin = GovernanceAdminService(source)
+    admin.set_permissions("order", [ActorPermission.DEPOSIT_FOOD], reason="migration test")
+    admin.set_power_level("order", PowerLevel.MIRACLE, reason="migration test")
+    admin.adjust_budget("order", BudgetKind.MIRACLE, 2, reason="migration test")
+    governance = DivineGovernanceService(source)
+    journal_id = governance.journal(
+        "herald",
+        JournalEntryType.OBSERVATION,
+        "Migration test journal entry",
+        world_tick=source.load_world().tick,
+    )
+    runtime.enqueue_command(
+        actor_id="order",
+        command_type="deposit_food",
+        payload={"x": 3.0, "y": 4.0, "count": 1},
+        idempotency_key="pending-during-migration",
+        created_at_utc=start + timedelta(seconds=5),
+    )
+    expected_digest = source.load_world().state_digest()
+
+    target = PostgreSQLRepository(TEST_DSN)
+    result = migrate_sqlite_to_postgres(source, target)
+
+    assert result.source_digest == expected_digest
+    assert result.target_digest == expected_digest
+    assert result.pending_commands == 1
+    assert result.audit_valid
+    assert target.load_world().state_digest() == expected_digest
+    target_runtime = RuntimeStorage(target)
+    assert target_runtime.pending_command_count() == 1
+    assert target_runtime.current_lease() is None
+    assert target_runtime.get_actor("herald").kind == "herald"
+    target_admin = GovernanceAdminService(target)
+    assert target_admin.storage.budget_balance("order", BudgetKind.MIRACLE) == 2
+    assert target_admin.storage.validate_audit_chain()
+
+    new_journal_id = DivineGovernanceService(target).journal(
+        "herald",
+        JournalEntryType.OBSERVATION,
+        "Post-migration sequence test",
+    )
+    assert new_journal_id > journal_id
