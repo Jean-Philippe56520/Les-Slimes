@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Callable, Protocol
 
-from ..database.sqlite_repo import SQLiteRepository
+from ..database.base import RelationalRepository
 from .canonical import CanonicalRuntime
 from .storage import WriterLease
 from .worker import CanonicalWorldWorker, WorkerRunResult
@@ -69,7 +69,7 @@ class WorkerHealth:
 class CanonicalWorkerService:
     def __init__(
         self,
-        repository: SQLiteRepository,
+        repository: RelationalRepository,
         *,
         config: WorkerServiceConfig | None = None,
         holder_id: str | None = None,

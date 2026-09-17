@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "les-slimes"
-version = "0.10.0a1"
+version = "0.11.0a1"
 description = "Deterministic artificial-life simulation for Les Slimes."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,6 +21,9 @@ api = [
   "fastapi>=0.115",
   "uvicorn>=0.30",
 ]
+postgres = [
+  "psycopg[binary]>=3.2",
+]
 dev = [
   "pytest>=8.0",
   "httpx>=0.27",
@@ -28,6 +31,7 @@ dev = [
 
 [project.scripts]
 les-slimes = "les_slimes.cli:main"
+les-slimes-production = "les_slimes.production:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
