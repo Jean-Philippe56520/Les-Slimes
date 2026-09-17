@@ -18,7 +18,9 @@ Le monde canonique ne change jamais de mode. Les restrictions portent sur les ac
 
 Toute mutation externe officielle suit désormais :
 
-`acteur -> permission -> gouvernance -> command queue persistante -> CanonicalWorldWorker -> moteur Python -> persistance`
+`acteur -> command queue persistante -> CanonicalWorldWorker -> GovernancePolicy -> moteur Python -> persistance atomique monde + intervention + budget + audit`
+
+La gouvernance est vérifiée à l'exécution puis revalidée juste avant le commit. Une commande peut donc être mise en queue puis rejetée si l'autorité a changé ; ce refus reste auditable.
 
 Les expériences sont explicitement non canoniques et structurellement isolées de la persistance officielle.
 
