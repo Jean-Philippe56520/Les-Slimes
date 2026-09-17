@@ -61,7 +61,7 @@ def test_common_canon_and_world_code_are_visible_but_creator_docs_are_not():
 
     for path in (
         "docs/GOD_WORLD_CANON.md",
-        "docs/DIVINE_GOVERNANCE.md",
+        "docs/GOD_GOVERNANCE_CANON.md",
         "src/les_slimes/world/engine.py",
         "src/les_slimes/cognition/rules.py",
         "src/les_slimes/biology/genetics.py",
@@ -74,6 +74,7 @@ def test_common_canon_and_world_code_are_visible_but_creator_docs_are_not():
         "docs/PROJECT_STATE.md",
         "docs/PROJECT_INSTRUCTIONS.md",
         "docs/DIVINE_AUTONOMY.md",
+        "docs/DIVINE_GOVERNANCE.md",
         "docs/SCIENTIFIC_PROTOCOL.md",
         "src/les_slimes/divine/access.py",
         "tests/test_creator_promulgation.py",
@@ -87,6 +88,8 @@ def test_direct_forbidden_read_stops_before_provider_call():
 
     with pytest.raises(PermissionError, match="knowledge surface"):
         gateway.read_file("docs/PROJECT_STATE.md")
+    with pytest.raises(PermissionError, match="knowledge surface"):
+        gateway.read_file("docs/DIVINE_GOVERNANCE.md")
     with pytest.raises(PermissionError, match="knowledge surface"):
         gateway.read_file("docs/GOD_ORDER_INSTRUCTIONS.md")
 
