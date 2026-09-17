@@ -23,6 +23,15 @@ _LASTROWID_TABLES = frozenset(
         "divine_proposals",
     }
 )
+_SEQUENCE_COLUMNS = (
+    ("observer_proposals", "id"),
+    ("runtime_commands", "sequence"),
+    ("divine_budget_ledger", "id"),
+    ("divine_sanctions", "id"),
+    ("divine_journal_entries", "id"),
+    ("divine_proposals", "id"),
+    ("divine_audit_log", "sequence"),
+)
 
 
 def _postgres_schema(script: str) -> str:
@@ -129,12 +138,7 @@ class _PostgresConnection:
 
 
 class PostgreSQLRepository(SQLiteRepository):
-    """PostgreSQL implementation preserving the canonical repository semantics.
-
-    World serialization is deliberately shared with SQLite so state digests and
-    save/load behavior stay identical. SQL compatibility is isolated in the connection
-    facade above; PostgreSQL-specific concurrency guards live in repository primitives.
-    """
+    """PostgreSQL implementation preserving the canonical repository semantics."""
 
     backend_name = "postgresql"
 
@@ -146,7 +150,6 @@ class PostgreSQLRepository(SQLiteRepository):
         if not dsn.startswith(("postgresql://", "postgres://")):
             raise ValueError("PostgreSQL DSN must start with postgresql:// or postgres://")
         self.dsn = dsn
-        # Kept only for inherited diagnostic text. PostgreSQL never uses this as storage.
         self.path = Path("postgresql-canonical")
 
     def _connect(self) -> _PostgresConnection:
@@ -191,9 +194,6 @@ class PostgreSQLRepository(SQLiteRepository):
 
     @staticmethod
     def begin_write(conn: _PostgresConnection) -> None:
-        # Psycopg begins the transaction automatically on this first statement.
-        # The transaction-scoped advisory lock reproduces SQLite BEGIN IMMEDIATE's
-        # serialization for canonical mutations and audit-chain appends.
         conn.raw.execute(
             "SELECT pg_advisory_xact_lock(%s)",
             (_GLOBAL_WRITE_LOCK,),
@@ -201,8 +201,6 @@ class PostgreSQLRepository(SQLiteRepository):
 
     @staticmethod
     def lock_writer_lease(conn: _PostgresConnection, lease_name: str) -> None:
-        # begin_write() already owns the global canonical write lock. This extra
-        # transaction lock makes the lease intent explicit and stable across hosts.
         conn.raw.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
             (lease_name,),
@@ -274,3 +272,19 @@ class PostgreSQLRepository(SQLiteRepository):
             """,
             (key, bytes(value)),
         )
+
+    def sync_sequences(self) -> None:
+        with self._connect() as conn:
+            for table_name, column_name in _SEQUENCE_COLUMNS:
+                if not self.table_exists(conn, table_name):
+                    continue
+                conn.raw.execute(
+                    f"""
+                    SELECT setval(
+                        pg_get_serial_sequence('{table_name}', '{column_name}'),
+                        COALESCE(MAX({column_name}), 1),
+                        MAX({column_name}) IS NOT NULL
+                    ) FROM {table_name}
+                    """
+                )
+            conn.commit()
