@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Callable
 
 from ..database.scope import ensure_canonical_scope
 from ..database.sqlite_repo import SQLiteRepository
@@ -93,6 +95,21 @@ class CanonicalRuntime:
             )
             conn.commit()
 
+    def _write_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        metadata: RuntimeMetadata,
+    ) -> None:
+        self.repository._set_meta(
+            conn, _STARTED, metadata.world_started_at_utc.isoformat().encode("ascii")
+        )
+        self.repository._set_meta(
+            conn, _LAST, metadata.last_simulated_at_utc.isoformat().encode("ascii")
+        )
+        self.repository._set_meta(
+            conn, _DURATION, str(metadata.tick_duration_seconds).encode("ascii")
+        )
+
     def _for_world(self, world: World, started: datetime) -> RuntimeMetadata:
         return RuntimeMetadata(
             started,
@@ -128,7 +145,13 @@ class CanonicalRuntime:
             self._write(reconciled)
         return reconciled
 
-    def advance_to(self, target_time: datetime) -> AdvanceResult:
+    def advance_to(
+        self,
+        target_time: datetime,
+        *,
+        before_batch: Callable[[], None] | None = None,
+        transaction_guard: Callable[[sqlite3.Connection], None] | None = None,
+    ) -> AdvanceResult:
         target = self._utc(target_time)
         metadata = self.ensure_initialized(target)
         world = self.repository.load_world()
@@ -137,11 +160,19 @@ class CanonicalRuntime:
         batches = 0
         remaining = due
         while remaining:
+            if before_batch is not None:
+                before_batch()
             count = min(self.batch_size, remaining)
             world.step(count)
-            self.repository.save_world(world)
-            metadata = self._for_world(world, metadata.world_started_at_utc)
-            self._write(metadata)
+            next_metadata = self._for_world(world, metadata.world_started_at_utc)
+            self.repository.save_world(
+                world,
+                transaction_guard=transaction_guard,
+                transaction_mutator=lambda conn, value=next_metadata: self._write_in_transaction(
+                    conn, value
+                ),
+            )
+            metadata = next_metadata
             remaining -= count
             batches += 1
         return AdvanceResult(
