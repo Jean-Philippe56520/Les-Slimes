@@ -42,6 +42,10 @@ class FakeGitProvider:
             state="open",
             mergeable=True,
         )
+        self.changed_files = (
+            "src/les_slimes/world/engine.py",
+            "tests/test_engine.py",
+        )
         self.passed = frozenset({"python", "postgres", "docker"})
         self.merge_result = GitMergeResult(True, MERGE, "merged")
         self.raise_on_merge: Exception | None = None
@@ -72,6 +76,10 @@ class FakeGitProvider:
     def get_pull_request(self, repository_full_name, pr_number):
         self._call("get_pull_request", repository_full_name, pr_number)
         return self.snapshot
+
+    def list_pull_request_files(self, repository_full_name, pr_number):
+        self._call("list_pull_request_files", repository_full_name, pr_number)
+        return self.changed_files
 
     def get_passed_checks(self, repository_full_name, commit_sha):
         self._call("get_passed_checks", repository_full_name, commit_sha)
@@ -235,6 +243,23 @@ def test_creator_promulgation_reserves_budget_merges_and_finalizes(tmp_path):
     assert GovernanceStorage(repo).budget_balance("chaos", BudgetKind.LEGISLATIVE) == before - 1
     assert len([call for call in provider.calls if call[0] == "merge_pull_request"]) == 1
     assert GovernanceStorage(repo).validate_audit_chain()
+
+
+def test_protected_pr_file_blocks_before_budget_or_merge(tmp_path):
+    repo = build_repo(tmp_path)
+    proposal_id = accepted_law(repo)
+    provider = FakeGitProvider()
+    provider.changed_files = (
+        "src/les_slimes/world/engine.py",
+        "src/les_slimes/divine/access.py",
+    )
+    before = GovernanceStorage(repo).budget_balance("chaos", BudgetKind.LEGISLATIVE)
+
+    with pytest.raises(PromulgationBlocked, match="protected file"):
+        CreatorPromulgationService(repo, provider).promulgate(proposal_id)
+
+    assert GovernanceStorage(repo).budget_balance("chaos", BudgetKind.LEGISLATIVE) == before
+    assert not any(call[0] == "merge_pull_request" for call in provider.calls)
 
 
 def test_drift_after_creator_review_blocks_before_budget_debit(tmp_path):
