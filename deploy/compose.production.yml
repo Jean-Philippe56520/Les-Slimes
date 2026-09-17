@@ -49,18 +49,3 @@ services:
       LES_SLIMES_WORKER_HEARTBEAT_SECONDS: ${LES_SLIMES_WORKER_HEARTBEAT_SECONDS:-10}
       LES_SLIMES_WORKER_BATCH_SIZE: ${LES_SLIMES_WORKER_BATCH_SIZE:-1000}
       LES_SLIMES_WORKER_COMMAND_PAGE_SIZE: ${LES_SLIMES_WORKER_COMMAND_PAGE_SIZE:-1000}
-
-  lab:
-    <<: *les-slimes-image
-    profiles: ["lab"]
-    command:
-      - streamlit
-      - run
-      - streamlit_app.py
-      - --server.address=0.0.0.0
-      - --server.port=8501
-    restart: unless-stopped
-    environment:
-      LES_SLIMES_DATABASE_URL: ${LES_SLIMES_DATABASE_URL:?set LES_SLIMES_DATABASE_URL}
-    ports:
-      - "${LES_SLIMES_LAB_PORT:-8501}:8501"
