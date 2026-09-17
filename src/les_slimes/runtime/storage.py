@@ -9,6 +9,7 @@ from typing import Any, Iterable
 
 from ..database.sqlite_repo import SQLiteRepository
 from .actors import DEFAULT_ACTORS, RuntimeActor, normalize_permissions
+from .commands import validate_command_payload
 
 
 RUNTIME_SCHEMA = """
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS runtime_commands (
     actor_id TEXT NOT NULL,
     command_type TEXT NOT NULL,
     payload_json TEXT NOT NULL,
+    source_proposal_id INTEGER,
     status TEXT NOT NULL DEFAULT 'pending',
     created_at_utc TEXT NOT NULL,
     applied_at_utc TEXT,
@@ -55,6 +57,7 @@ class RuntimeCommand:
     actor_id: str
     command_type: str
     payload: dict[str, Any]
+    source_proposal_id: int | None
     status: str
     created_at_utc: datetime
 
@@ -78,6 +81,11 @@ class RuntimeStorage:
         self.repository.initialize_schema()
         with self.repository._connect() as conn:
             conn.executescript(RUNTIME_SCHEMA)
+            command_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(runtime_commands)")
+            }
+            if "source_proposal_id" not in command_columns:
+                conn.execute("ALTER TABLE runtime_commands ADD COLUMN source_proposal_id INTEGER")
             for actor in DEFAULT_ACTORS:
                 conn.execute(
                     """
@@ -175,10 +183,14 @@ class RuntimeStorage:
         payload: dict[str, Any],
         idempotency_key: str,
         created_at_utc: datetime,
+        source_proposal_id: int | None = None,
     ) -> RuntimeCommand:
         if not actor_id or not command_type or not idempotency_key:
             raise ValueError("actor_id, command_type and idempotency_key are required")
         self.get_actor(actor_id)
+        validate_command_payload(command_type, payload)
+        if source_proposal_id is not None and source_proposal_id < 1:
+            raise ValueError("source_proposal_id must be positive")
         created_at = self._utc(created_at_utc)
         payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         command_id = f"CMD-{uuid.uuid4().hex}"
@@ -193,8 +205,8 @@ class RuntimeStorage:
                     """
                     INSERT INTO runtime_commands(
                         id, idempotency_key, actor_id, command_type, payload_json,
-                        status, created_at_utc
-                    ) VALUES (?, ?, ?, ?, ?, 'pending', ?)
+                        source_proposal_id, status, created_at_utc
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
                     """,
                     (
                         command_id,
@@ -202,6 +214,7 @@ class RuntimeStorage:
                         actor_id,
                         command_type,
                         payload_json,
+                        source_proposal_id,
                         created_at.isoformat(),
                     ),
                 )
@@ -225,6 +238,13 @@ class RuntimeStorage:
                 (limit,),
             ).fetchall()
         return [self._row_to_command(row) for row in rows]
+
+    def recent_commands(self, *, limit: int = 100) -> list[sqlite3.Row]:
+        with self.repository._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM runtime_commands ORDER BY sequence DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
 
     def mark_applied(
         self,
@@ -366,6 +386,9 @@ class RuntimeStorage:
             actor_id=str(row["actor_id"]),
             command_type=str(row["command_type"]),
             payload=json.loads(row["payload_json"]),
+            source_proposal_id=(
+                int(row["source_proposal_id"]) if row["source_proposal_id"] is not None else None
+            ),
             status=str(row["status"]),
             created_at_utc=self._parse_dt(row["created_at_utc"]),
         )
