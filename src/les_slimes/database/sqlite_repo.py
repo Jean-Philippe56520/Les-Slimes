@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from ..biology.genetics import Genome
 from ..cognition.memory import FoodMemory
@@ -144,7 +144,44 @@ CREATE TABLE IF NOT EXISTS checkpoints (
 """
 
 
+_SQLITE_GOVERNANCE_GUARDS = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_divine_budget_single_intervention_debit
+ON divine_budget_ledger(intervention_id)
+WHERE intervention_id IS NOT NULL AND delta < 0;
+
+CREATE TRIGGER IF NOT EXISTS trg_divine_intervention_valid_status_insert
+BEFORE INSERT ON divine_interventions
+WHEN NEW.status NOT IN (
+    'proposed', 'authorized', 'executed',
+    'rejected', 'cancelled', 'transgression'
+)
+BEGIN
+    SELECT RAISE(ABORT, 'invalid divine intervention status');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_divine_intervention_valid_status_update
+BEFORE UPDATE OF status ON divine_interventions
+WHEN NEW.status NOT IN (
+    'proposed', 'authorized', 'executed',
+    'rejected', 'cancelled', 'transgression'
+)
+BEGIN
+    SELECT RAISE(ABORT, 'invalid divine intervention status');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_divine_intervention_terminal_status
+BEFORE UPDATE OF status ON divine_interventions
+WHEN OLD.status IN ('executed', 'rejected', 'cancelled')
+     AND NEW.status <> OLD.status
+BEGIN
+    SELECT RAISE(ABORT, 'terminal divine intervention status cannot change');
+END;
+"""
+
+
 class SQLiteRepository:
+    backend_name = "sqlite"
+
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,12 +193,60 @@ class SQLiteRepository:
         conn.execute("PRAGMA journal_mode = WAL")
         return conn
 
+    def storage_exists(self) -> bool:
+        return self.path.exists()
+
+    @staticmethod
+    def table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        return row is not None
+
+    @staticmethod
+    def column_names(conn: sqlite3.Connection, table_name: str) -> set[str]:
+        if not table_name.replace("_", "").isalnum():
+            raise ValueError("Invalid table name")
+        return {str(row["name"]) for row in conn.execute(f"PRAGMA table_info({table_name})")}
+
+    @staticmethod
+    def execute_script(conn: sqlite3.Connection, script: str) -> None:
+        conn.executescript(script)
+
+    @staticmethod
+    def begin_write(conn: sqlite3.Connection) -> None:
+        conn.execute("BEGIN IMMEDIATE")
+
+    @staticmethod
+    def lock_writer_lease(conn: sqlite3.Connection, lease_name: str) -> None:
+        # BEGIN IMMEDIATE already serializes SQLite writers. The explicit hook exists
+        # so PostgreSQL can take a transaction-scoped advisory lock instead.
+        del conn, lease_name
+
+    def install_governance_guards(self, conn: sqlite3.Connection) -> None:
+        if self.table_exists(conn, "divine_budget_ledger"):
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_divine_budget_single_intervention_debit
+                ON divine_budget_ledger(intervention_id)
+                WHERE intervention_id IS NOT NULL AND delta < 0
+                """
+            )
+        if self.table_exists(conn, "divine_interventions"):
+            conn.executescript(
+                _SQLITE_GOVERNANCE_GUARDS.split(
+                    "CREATE TRIGGER IF NOT EXISTS trg_divine_intervention_valid_status_insert", 1
+                )[1]
+                .join(
+                    ["CREATE TRIGGER IF NOT EXISTS trg_divine_intervention_valid_status_insert", ""]
+                )
+            )
+
     def initialize_schema(self) -> None:
         with self._connect() as conn:
             conn.executescript(SCHEMA)
-            columns = {
-                row["name"] for row in conn.execute("PRAGMA table_info(slimes)")
-            }
+            columns = self.column_names(conn, "slimes")
             if "last_signal_emit_tick" not in columns:
                 conn.execute(
                     "ALTER TABLE slimes ADD COLUMN last_signal_emit_tick "
@@ -173,15 +258,9 @@ class SQLiteRepository:
             return False
         try:
             with self._connect() as conn:
-                row = conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name='metadata'"
-                ).fetchone()
-                if row is None:
+                if not self.table_exists(conn, "metadata"):
                     return False
-                return (
-                    conn.execute("SELECT 1 FROM metadata WHERE key='tick'").fetchone()
-                    is not None
-                )
+                return conn.execute("SELECT 1 FROM metadata WHERE key='tick'").fetchone() is not None
         except sqlite3.DatabaseError:
             return False
 
@@ -210,26 +289,18 @@ class SQLiteRepository:
         digest = world.state_digest()
 
         with self._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
+            self.begin_write(conn)
             if transaction_guard is not None:
                 transaction_guard(conn)
 
             self._set_meta(conn, "config", cfg_json)
             conn.execute("DELETE FROM metadata WHERE key='mode'")
             self._set_meta(conn, "tick", self._int_bytes(world.tick))
-            self._set_meta(
-                conn, "next_slime_number", self._int_bytes(world.next_slime_number)
-            )
+            self._set_meta(conn, "next_slime_number", self._int_bytes(world.next_slime_number))
             self._set_meta(conn, "next_food_id", self._int_bytes(world.next_food_id))
-            self._set_meta(
-                conn, "next_rule_number", self._int_bytes(world.next_rule_number)
-            )
-            self._set_meta(
-                conn, "next_mystery_number", self._int_bytes(world.next_mystery_number)
-            )
-            self._set_meta(
-                conn, "event_sequence", self._int_bytes(world.event_sequence)
-            )
+            self._set_meta(conn, "next_rule_number", self._int_bytes(world.next_rule_number))
+            self._set_meta(conn, "next_mystery_number", self._int_bytes(world.next_mystery_number))
+            self._set_meta(conn, "event_sequence", self._int_bytes(world.event_sequence))
             self._set_meta(conn, "births_total", self._int_bytes(world.births_total))
             self._set_meta(conn, "deaths_total", self._int_bytes(world.deaths_total))
             self._set_meta(conn, "rng_state", world.rng_state_bytes())
@@ -277,21 +348,14 @@ class SQLiteRepository:
                 ],
             )
 
-            memory_rows = []
-            relation_rows = []
-            association_rows = []
-            heard_rows = []
+            memory_rows: list[tuple[Any, ...]] = []
+            relation_rows: list[tuple[Any, ...]] = []
+            association_rows: list[tuple[Any, ...]] = []
+            heard_rows: list[tuple[Any, ...]] = []
             for slime in world.slimes.values():
                 for idx, memory in enumerate(slime.memories):
                     memory_rows.append(
-                        (
-                            slime.id,
-                            idx,
-                            memory.x,
-                            memory.y,
-                            memory.strength,
-                            memory.last_seen_tick,
-                        )
+                        (slime.id, idx, memory.x, memory.y, memory.strength, memory.last_seen_tick)
                     )
                 for target_id, relation in slime.relations.items():
                     if target_id not in world.slimes:
@@ -310,73 +374,41 @@ class SQLiteRepository:
                     association_rows.append((slime.id, signal, strength))
                 for idx, heard in enumerate(slime.heard_signals):
                     heard_rows.append(
-                        (
-                            slime.id,
-                            idx,
-                            heard.signal,
-                            heard.x,
-                            heard.y,
-                            heard.tick,
-                            heard.source_id,
-                        )
+                        (slime.id, idx, heard.signal, heard.x, heard.y, heard.tick, heard.source_id)
                     )
 
             conn.executemany(
-                """
-                INSERT INTO memories(slime_id, memory_index, x, y, strength, last_seen_tick)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
+                "INSERT INTO memories(slime_id, memory_index, x, y, strength, last_seen_tick) VALUES (?, ?, ?, ?, ?, ?)",
                 memory_rows,
             )
             conn.executemany(
-                """
-                INSERT INTO relations(
-                    slime_id, target_id, familiarity, trust,
-                    interactions, last_interaction_tick
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
+                "INSERT INTO relations(slime_id, target_id, familiarity, trust, interactions, last_interaction_tick) VALUES (?, ?, ?, ?, ?, ?)",
                 relation_rows,
             )
             conn.executemany(
-                """
-                INSERT INTO signal_associations(slime_id, signal, food_strength)
-                VALUES (?, ?, ?)
-                """,
+                "INSERT INTO signal_associations(slime_id, signal, food_strength) VALUES (?, ?, ?)",
                 association_rows,
             )
             conn.executemany(
-                """
-                INSERT INTO heard_signals(
-                    slime_id, heard_index, signal, x, y, tick, source_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
+                "INSERT INTO heard_signals(slime_id, heard_index, signal, x, y, tick, source_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 heard_rows,
             )
 
             conn.executemany(
                 "INSERT INTO mysteries(id, payload_json) VALUES (?, ?)",
                 [
-                    (
-                        mystery.id,
-                        json.dumps(mystery.to_dict(include_hidden=True), sort_keys=True),
-                    )
+                    (mystery.id, json.dumps(mystery.to_dict(include_hidden=True), sort_keys=True))
                     for mystery in world.mysteries.values()
                 ],
             )
-
             conn.executemany(
                 "INSERT INTO behavior_rules(id, payload_json) VALUES (?, ?)",
-                [
-                    (rule.id, json.dumps(rule.to_dict(), sort_keys=True))
-                    for rule in world.behavior_rules.values()
-                ],
+                [(rule.id, json.dumps(rule.to_dict(), sort_keys=True)) for rule in world.behavior_rules.values()],
             )
-
             conn.executemany(
                 "INSERT INTO foods(id, x, y, nutrition) VALUES (?, ?, ?, ?)",
                 [(f.id, f.x, f.y, f.nutrition) for f in world.foods.values()],
             )
-
             conn.executemany(
                 """
                 INSERT OR IGNORE INTO events(sequence, tick, type, subject_id, payload_json)
@@ -434,10 +466,7 @@ class SQLiteRepository:
         self.initialize_schema()
 
         with self._connect() as conn:
-            meta = {
-                row["key"]: row["value"]
-                for row in conn.execute("SELECT key, value FROM metadata")
-            }
+            meta = {row["key"]: row["value"] for row in conn.execute("SELECT key, value FROM metadata")}
             config_raw = meta["config"]
             if isinstance(config_raw, bytes):
                 config_raw = config_raw.decode("utf-8")
@@ -445,27 +474,17 @@ class SQLiteRepository:
             world = World(config, initialize=False)
 
             world.tick = int(bytes(meta["tick"]).decode("ascii"))
-            world.next_slime_number = int(
-                bytes(meta["next_slime_number"]).decode("ascii")
-            )
+            world.next_slime_number = int(bytes(meta["next_slime_number"]).decode("ascii"))
             world.next_food_id = int(bytes(meta["next_food_id"]).decode("ascii"))
-            world.next_rule_number = int(
-                bytes(meta.get("next_rule_number", b"1")).decode("ascii")
-            )
-            world.next_mystery_number = int(
-                bytes(meta.get("next_mystery_number", b"1")).decode("ascii")
-            )
-            world.event_sequence = int(
-                bytes(meta["event_sequence"]).decode("ascii")
-            )
+            world.next_rule_number = int(bytes(meta.get("next_rule_number", b"1")).decode("ascii"))
+            world.next_mystery_number = int(bytes(meta.get("next_mystery_number", b"1")).decode("ascii"))
+            world.event_sequence = int(bytes(meta["event_sequence"]).decode("ascii"))
             world.births_total = int(bytes(meta["births_total"]).decode("ascii"))
             world.deaths_total = int(bytes(meta["deaths_total"]).decode("ascii"))
             world.restore_rng_state(bytes(meta["rng_state"]))
 
             memories_by_slime: dict[str, list[FoodMemory]] = {}
-            for row in conn.execute(
-                "SELECT * FROM memories ORDER BY slime_id, memory_index"
-            ):
+            for row in conn.execute("SELECT * FROM memories ORDER BY slime_id, memory_index"):
                 memories_by_slime.setdefault(row["slime_id"], []).append(
                     FoodMemory(
                         x=row["x"],
@@ -485,17 +504,13 @@ class SQLiteRepository:
                 )
 
             associations_by_slime: dict[str, dict[str, float]] = {}
-            for row in conn.execute(
-                "SELECT * FROM signal_associations ORDER BY slime_id, signal"
-            ):
-                associations_by_slime.setdefault(row["slime_id"], {})[
-                    row["signal"]
-                ] = row["food_strength"]
+            for row in conn.execute("SELECT * FROM signal_associations ORDER BY slime_id, signal"):
+                associations_by_slime.setdefault(row["slime_id"], {})[row["signal"]] = row[
+                    "food_strength"
+                ]
 
             heard_by_slime: dict[str, list[HeardSignal]] = {}
-            for row in conn.execute(
-                "SELECT * FROM heard_signals ORDER BY slime_id, heard_index"
-            ):
+            for row in conn.execute("SELECT * FROM heard_signals ORDER BY slime_id, heard_index"):
                 heard_by_slime.setdefault(row["slime_id"], []).append(
                     HeardSignal(
                         signal=row["signal"],
@@ -542,25 +557,17 @@ class SQLiteRepository:
                 world.slimes[slime.id] = slime
 
             world.replace_foods(
-                Food(
-                    id=row["id"],
-                    x=row["x"],
-                    y=row["y"],
-                    nutrition=row["nutrition"],
-                )
+                Food(id=row["id"], x=row["x"], y=row["y"], nutrition=row["nutrition"])
                 for row in conn.execute("SELECT * FROM foods ORDER BY id")
             )
             world.pending_events = []
             return world
 
-    def add_observer_proposal(
-        self, tick: int, proposal: dict, *, status: str = "pending"
-    ) -> int:
+    def add_observer_proposal(self, tick: int, proposal: dict, *, status: str = "pending") -> int:
         self.initialize_schema()
         with self._connect() as conn:
             cursor = conn.execute(
-                "INSERT INTO observer_proposals(tick, proposal_json, status) "
-                "VALUES (?, ?, ?)",
+                "INSERT INTO observer_proposals(tick, proposal_json, status) VALUES (?, ?, ?)",
                 (tick, json.dumps(proposal, sort_keys=True), status),
             )
             conn.commit()
@@ -583,12 +590,10 @@ class SQLiteRepository:
         with self._connect() as conn:
             if status is None:
                 return conn.execute(
-                    "SELECT * FROM observer_proposals ORDER BY id DESC LIMIT ?",
-                    (limit,),
+                    "SELECT * FROM observer_proposals ORDER BY id DESC LIMIT ?", (limit,)
                 ).fetchall()
             return conn.execute(
-                "SELECT * FROM observer_proposals WHERE status=? "
-                "ORDER BY id DESC LIMIT ?",
+                "SELECT * FROM observer_proposals WHERE status=? ORDER BY id DESC LIMIT ?",
                 (status, limit),
             ).fetchall()
 
