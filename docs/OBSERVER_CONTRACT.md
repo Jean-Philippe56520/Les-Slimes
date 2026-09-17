@@ -1,25 +1,28 @@
 # Contrat de l'Observateur IA
 
-L'Observateur est externe au cerveau des Slimes. Il analyse le monde, formule des hypothèses et peut proposer des modifications déclaratives en Sandbox.
+L'Observateur est externe au cerveau des Slimes. Il lit le monde canonique, formule des observations/hypothèses et peut proposer des interventions déclaratives. Il ne modifie jamais directement le monde.
 
-## Flux
+## Flux canonique
 
 1. `les-slimes report` produit un état condensé et mesurable.
 2. Le LLM retourne une proposition JSON.
 3. `proposal-import` valide le schéma et place la proposition dans l'Inbox.
-4. L'humain peut examiner la proposition.
-5. `proposal-apply` ou l'UI tente l'application.
-6. Le moteur valide l'action via une allowlist.
-7. L'état et l'événement sont persistés.
+4. Un acteur autorisé examine la proposition.
+5. Une proposition mutante est convertie en description de commande par `proposal_to_command`.
+6. L'acteur approbateur soumet cette commande dans la command queue avec `source_proposal_id`.
+7. Le `CanonicalWorldWorker` vérifie identité + permission, applique la commande puis persiste l'état et l'événement.
+8. Une proposition analytique reste lecture seule et ne crée aucune commande.
+
+L'identité de l'Observateur ne remplace jamais celle de l'acteur qui autorise l'intervention. La provenance doit permettre de distinguer qui a proposé et qui a approuvé.
 
 ## Types
 
 - `observation` : lecture seule ;
 - `hypothesis` : lecture seule ;
 - `experiment_proposal` : lecture seule ;
-- `behavior_candidate` : ajoute une règle du DSL comportemental ;
-- `world_event_proposal` : nourriture ou signal ;
-- `mystery_proposal` : ajoute un mystère allowlisté.
+- `behavior_candidate` : peut devenir `add_behavior_rule` ;
+- `world_event_proposal` : peut devenir `deposit_food` ou `emit_signal` ;
+- `mystery_proposal` : peut devenir `add_mystery`.
 
 ## DSL comportemental
 
@@ -31,11 +34,15 @@ Aucune action n'accepte du code.
 
 ## Sécurité
 
-Le LLM ne peut jamais :
+L'Observateur ne peut jamais :
 
 - écrire directement dans SQLite ;
-- exécuter du Python ;
+- appeler une primitive mutante de `World` depuis son flux externe ;
+- exécuter du Python arbitraire ;
 - modifier le moteur ;
-- injecter une action hors allowlist ;
-- intervenir en Observation/Experiment ;
-- transformer une hypothèse en conclusion scientifique sans métriques.
+- injecter une action hors registre de commandes/allowlist ;
+- contourner les permissions de l'acteur approbateur ;
+- transformer une hypothèse en conclusion scientifique sans métriques ;
+- écrire dans un autre repo.
+
+Toute intervention issue d'une proposition doit être attribuable et traverser la command queue puis le writer unique.
