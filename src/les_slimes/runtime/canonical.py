@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Callable
+from typing import Any, Callable
 
+from ..database.base import RelationalRepository
 from ..database.scope import ensure_canonical_scope
-from ..database.sqlite_repo import SQLiteRepository
 from ..world.engine import World
 
 
@@ -33,7 +32,7 @@ class AdvanceResult:
 
 
 class CanonicalRuntime:
-    def __init__(self, repository: SQLiteRepository, *, batch_size: int = 1000) -> None:
+    def __init__(self, repository: RelationalRepository, *, batch_size: int = 1000) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be >= 1")
         ensure_canonical_scope(repository)
@@ -83,7 +82,7 @@ class CanonicalRuntime:
     def _write(self, metadata: RuntimeMetadata) -> None:
         self.repository.initialize_schema()
         with self.repository._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
+            self.repository.begin_write(conn)
             self.repository._set_meta(
                 conn, _STARTED, metadata.world_started_at_utc.isoformat().encode("ascii")
             )
@@ -97,7 +96,7 @@ class CanonicalRuntime:
 
     def _write_in_transaction(
         self,
-        conn: sqlite3.Connection,
+        conn: Any,
         metadata: RuntimeMetadata,
     ) -> None:
         self.repository._set_meta(
@@ -159,7 +158,7 @@ class CanonicalRuntime:
         target_time: datetime,
         *,
         before_batch: Callable[[], None] | None = None,
-        transaction_guard: Callable[[sqlite3.Connection], None] | None = None,
+        transaction_guard: Callable[[Any], None] | None = None,
     ) -> AdvanceResult:
         target = self._utc(target_time)
         metadata = self.ensure_initialized(target)

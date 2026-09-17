@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import sqlite3
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import Any
 
-if TYPE_CHECKING:
-    from .sqlite_repo import SQLiteRepository
+from .base import RelationalRepository
 
 
 PERSISTENCE_SCOPE_KEY = "persistence_scope"
@@ -29,45 +27,39 @@ def _text(value: object) -> str:
 
 
 def persistence_scope_from_connection(
-    conn: sqlite3.Connection,
+    repository: RelationalRepository,
+    conn: Any,
 ) -> PersistenceScope | None:
-    table = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='metadata'"
-    ).fetchone()
-    if table is None:
+    if not repository.table_exists(conn, "metadata"):
         return None
 
     row = conn.execute(
         "SELECT value FROM metadata WHERE key = ?", (PERSISTENCE_SCOPE_KEY,)
     ).fetchone()
     if row is not None:
-        raw = row[0]
+        raw = row["value"]
         try:
             return PersistenceScope(_text(raw))
         except ValueError as exc:
-            raise PersistenceScopeError(
-                f"Unknown persistence scope {_text(raw)!r}"
-            ) from exc
+            raise PersistenceScopeError(f"Unknown persistence scope {_text(raw)!r}") from exc
 
     # Databases created before persistence scopes existed are the historical
     # canonical database only. A database without a saved world remains unscoped.
-    legacy_world = conn.execute(
-        "SELECT 1 FROM metadata WHERE key = 'tick'"
-    ).fetchone()
+    legacy_world = conn.execute("SELECT 1 FROM metadata WHERE key = 'tick'").fetchone()
     if legacy_world is not None:
         return PersistenceScope.CANONICAL
     return None
 
 
-def get_persistence_scope(repository: SQLiteRepository) -> PersistenceScope | None:
-    if not repository.path.exists():
+def get_persistence_scope(repository: RelationalRepository) -> PersistenceScope | None:
+    if not repository.storage_exists():
         return None
     with repository._connect() as conn:
-        return persistence_scope_from_connection(conn)
+        return persistence_scope_from_connection(repository, conn)
 
 
 def set_persistence_scope(
-    repository: SQLiteRepository,
+    repository: RelationalRepository,
     scope: PersistenceScope,
 ) -> PersistenceScope:
     repository.initialize_schema()
@@ -83,7 +75,7 @@ def set_persistence_scope(
 
 
 def require_persistence_scope(
-    repository: SQLiteRepository,
+    repository: RelationalRepository,
     expected: PersistenceScope,
 ) -> PersistenceScope:
     current = get_persistence_scope(repository)
@@ -95,7 +87,7 @@ def require_persistence_scope(
     return current
 
 
-def ensure_canonical_scope(repository: SQLiteRepository) -> PersistenceScope:
+def ensure_canonical_scope(repository: RelationalRepository) -> PersistenceScope:
     current = get_persistence_scope(repository)
     if current != PersistenceScope.CANONICAL:
         actual = current.value if current is not None else "unscoped"

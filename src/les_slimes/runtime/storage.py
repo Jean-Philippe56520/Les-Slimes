@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Iterable
 
+from ..database.base import RelationalRepository
 from ..database.scope import ensure_canonical_scope
-from ..database.sqlite_repo import SQLiteRepository
 from .actors import DEFAULT_ACTORS, RuntimeActor, normalize_permissions
 from .commands import validate_command_payload
 
@@ -81,7 +80,7 @@ class WriterLeaseLost(RuntimeError):
 
 
 class RuntimeStorage:
-    def __init__(self, repository: SQLiteRepository) -> None:
+    def __init__(self, repository: RelationalRepository) -> None:
         ensure_canonical_scope(repository)
         self.repository = repository
         self.initialize_schema()
@@ -99,16 +98,12 @@ class RuntimeStorage:
     def initialize_schema(self) -> None:
         self.repository.initialize_schema()
         with self.repository._connect() as conn:
-            conn.executescript(RUNTIME_SCHEMA)
-            command_columns = {
-                row["name"] for row in conn.execute("PRAGMA table_info(runtime_commands)")
-            }
+            self.repository.execute_script(conn, RUNTIME_SCHEMA)
+            command_columns = self.repository.column_names(conn, "runtime_commands")
             if "source_proposal_id" not in command_columns:
                 conn.execute("ALTER TABLE runtime_commands ADD COLUMN source_proposal_id INTEGER")
 
-            lease_columns = {
-                row["name"] for row in conn.execute("PRAGMA table_info(runtime_writer_lease)")
-            }
+            lease_columns = self.repository.column_names(conn, "runtime_writer_lease")
             if "lease_token" not in lease_columns:
                 conn.execute("ALTER TABLE runtime_writer_lease ADD COLUMN lease_token TEXT")
             if "generation" not in lease_columns:
@@ -229,7 +224,7 @@ class RuntimeStorage:
         payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         command_id = f"CMD-{uuid.uuid4().hex}"
         with self.repository._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
+            self.repository.begin_write(conn)
             existing = conn.execute(
                 "SELECT * FROM runtime_commands WHERE idempotency_key = ?",
                 (idempotency_key,),
@@ -312,7 +307,7 @@ class RuntimeStorage:
             ).fetchone()
         return self._parse_dt(row["created_at_utc"]) if row else None
 
-    def recent_commands(self, *, limit: int = 100) -> list[sqlite3.Row]:
+    def recent_commands(self, *, limit: int = 100) -> list[Any]:
         with self.repository._connect() as conn:
             return conn.execute(
                 "SELECT * FROM runtime_commands ORDER BY sequence DESC LIMIT ?",
@@ -375,7 +370,8 @@ class RuntimeStorage:
         expires = now + timedelta(seconds=ttl_seconds)
         token = uuid.uuid4().hex
         with self.repository._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
+            self.repository.begin_write(conn)
+            self.repository.lock_writer_lease(conn, lease_name)
             row = conn.execute(
                 "SELECT * FROM runtime_writer_lease WHERE lease_name = ?",
                 (lease_name,),
@@ -489,7 +485,7 @@ class RuntimeStorage:
 
     def assert_lease_in_transaction(
         self,
-        conn: sqlite3.Connection,
+        conn: Any,
         lease: WriterLease,
         *,
         now_utc: datetime,
@@ -512,7 +508,7 @@ class RuntimeStorage:
         if not valid:
             raise WriterLeaseLost("Canonical writer lease is no longer valid")
 
-    def _row_to_actor(self, row: sqlite3.Row) -> RuntimeActor:
+    def _row_to_actor(self, row: Any) -> RuntimeActor:
         return RuntimeActor(
             id=str(row["id"]),
             kind=str(row["kind"]),
@@ -521,7 +517,7 @@ class RuntimeStorage:
             active=bool(row["active"]),
         )
 
-    def _row_to_command(self, row: sqlite3.Row) -> RuntimeCommand:
+    def _row_to_command(self, row: Any) -> RuntimeCommand:
         return RuntimeCommand(
             sequence=int(row["sequence"]),
             id=str(row["id"]),
@@ -530,13 +526,15 @@ class RuntimeStorage:
             command_type=str(row["command_type"]),
             payload=json.loads(row["payload_json"]),
             source_proposal_id=(
-                int(row["source_proposal_id"]) if row["source_proposal_id"] is not None else None
+                int(row["source_proposal_id"])
+                if row["source_proposal_id"] is not None
+                else None
             ),
             status=str(row["status"]),
             created_at_utc=self._parse_dt(row["created_at_utc"]),
         )
 
-    def _row_to_lease(self, row: sqlite3.Row) -> WriterLease:
+    def _row_to_lease(self, row: Any) -> WriterLease:
         return WriterLease(
             lease_name=str(row["lease_name"]),
             holder_id=str(row["holder_id"]),
