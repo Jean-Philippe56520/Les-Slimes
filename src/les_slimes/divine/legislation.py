@@ -39,6 +39,13 @@ _EDITABLE_STATUSES = frozenset(
         LegislativeStatus.BLOCKED,
     }
 )
+_TERMINAL_STATUSES = frozenset(
+    {
+        LegislativeStatus.REJECTED,
+        LegislativeStatus.PROMULGATED,
+        LegislativeStatus.SUPERSEDED,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,6 +245,10 @@ class DivineLegislationService:
             "pr_number": (expected.get("pr_number"), candidate.pr_number),
             "head_sha": (expected.get("head_sha"), candidate.head_sha),
             "base_sha": (expected.get("base_sha"), candidate.base_sha),
+            "required_checks": (
+                tuple(expected.get("required_checks", [])),
+                tuple(candidate.required_checks),
+            ),
         }
         for name, (dossier_value, candidate_value) in pairs.items():
             if dossier_value != candidate_value:
@@ -255,6 +266,8 @@ class DivineLegislationService:
     ) -> CreatorReview:
         self._require_father(performed_by)
         stored = self.get(proposal_id)
+        if LegislativeStatus(stored["status"]) in _TERMINAL_STATUSES:
+            raise PermissionError("Terminal Laws cannot be reviewed again")
         review = self.creator_cycle.review(candidate, decision=decision, reason=reason)
         mismatches = self._dossier_mismatches(stored, candidate)
         if mismatches:
