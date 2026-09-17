@@ -4,7 +4,7 @@
 
 Les Slimes est un projet de vie artificielle déterministe et persistante. Les Slimes ne sont pas des prompts : ils existent dans un moteur Python simulant biologie, génétique, perception, mémoire, apprentissage, relations sociales, culture et environnement.
 
-Le projet vise un **unique monde canonique**, persistant et partagé, observé via une application React/PixiJS et gouverné progressivement par des assistants IA autonomes mais extérieurs aux Slimes.
+Le projet vise un **unique monde canonique**, persistant et partagé, observé via une application React/PixiJS et gouverné progressivement par des acteurs divins autonomes extérieurs aux Slimes.
 
 ## Principes
 
@@ -21,7 +21,7 @@ Le projet vise un **unique monde canonique**, persistant et partagé, observé v
 
 `Jean-Philippe56520/Les-Slimes`
 
-Toutes les opérations GitHub des assistants Les Slimes restent limitées à ce dépôt.
+Toutes les opérations GitHub Les Slimes restent limitées à ce dépôt.
 
 # Un seul monde canonique
 
@@ -93,6 +93,26 @@ Google Drive : rapports/snapshots/journaux uniquement
 - Transgression = classification auditable, jamais bypass ;
 - Conseil, journaux et propositions persistants.
 
+## Autonomie divine confinée
+
+Le dépôt contient désormais le socle complet de confinement et de législation autonome :
+
+- `DivineAccessPolicy` : repo unique, Drive LES_SLIMES, API allowlistée, aucune surface Web générale, branches et surfaces d'écriture limitées ;
+- frontière épistémique : les dieux lisent uniquement leur Canon commun, la Constitution divine lisible, leur instruction propre et les mécanismes du vivant accessibles ;
+- `DivineGitGateway` : recherche/lecture/écriture/PR sans primitive de merge ;
+- `DivineArchiveGateway` : recherche et capabilities confinées sous LES_SLIMES ;
+- `DivineWorldGateway` : API canonique typée sans `actor_id` contrôlé par le dieu ;
+- `LawDossier` / `DivineLegislationService` : dossier de Loi persistant, amendement, états et audit ;
+- `SovereignCreatorCycle` : revue du Père pouvant accepter, refuser, attendre ou exiger amendement/expérience ;
+- `CreatorPromulgationService` : revalidation de PR/SHA/main/CI/gouvernance/fichiers, réservation budgétaire et réconciliation des résultats Git incertains ;
+- le Créateur seul peut produire une `MergeAuthorization` et promulguer sur `main`.
+
+Une Loi d'Ordre ou Chaos peut modifier les surfaces du vivant autorisées et leurs tests non protecteurs, mais pas gouvernance, identité, authentification, base canonique, runtime, frontière divine, CI, déploiement, frontend, documentation ou tests de sécurité.
+
+**Important :** ces contrats et garde-fous sont codés et testés, mais les providers concrets et credentials minimaux ne sont pas encore déployés. Les cycles autonomes ne doivent donc pas encore être activés.
+
+Voir `docs/DIVINE_AUTONOMY.md`, `docs/GOD_CREATOR_INSTRUCTIONS.md` et `docs/PROJECT_STATE.md`.
+
 ## API canonique
 
 FastAPI fournit la frontière réseau :
@@ -154,10 +174,12 @@ Aucun dieu ne commande directement les Slimes.
 # Prochaines étapes
 
 1. activer un hébergement réel PostgreSQL + API + Worker et vérifier le monde H24 ;
-2. déployer le frontend Netlify et configurer `VITE_API_BASE_URL` + CORS ;
-3. mettre en place sauvegardes/restauration et supervision opérationnelle ;
-4. automatiser rapports/Drive ;
-5. activer Ordre/Chaos comme agents autonomes et leurs cycles planifiés ;
-6. exporter journaux/Conseil vers Drive sans changer la source transactionnelle.
+2. implémenter/déployer les providers concrets des gateways avec credentials minimaux et scopes réels ;
+3. vérifier en bout en bout l'absence de Web/connecteurs génériques chez Ordre/Chaos ;
+4. exécuter des cycles shadow Ordre -> Chaos -> Créateur ;
+5. seulement après validation, créer les tâches planifiées et passer à la promulgation contrôlée ;
+6. déployer le frontend Netlify et configurer `VITE_API_BASE_URL` + CORS ;
+7. mettre en place sauvegardes/restauration et supervision ;
+8. automatiser rapports/Drive sans changer la source transactionnelle.
 
 Pour reprendre le projet, lire d'abord `docs/PROJECT_STATE.md` puis `docs/PROJECT_INSTRUCTIONS.md`.
