@@ -5,9 +5,10 @@ import sqlite3
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Iterable
 
 from ..database.sqlite_repo import SQLiteRepository
+from .actors import DEFAULT_ACTORS, RuntimeActor, normalize_permissions
 
 
 RUNTIME_SCHEMA = """
@@ -34,6 +35,14 @@ CREATE TABLE IF NOT EXISTS runtime_writer_lease (
     acquired_at_utc TEXT NOT NULL,
     heartbeat_at_utc TEXT NOT NULL,
     expires_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS runtime_actors (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    permissions_json TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1
 );
 """
 
@@ -69,6 +78,94 @@ class RuntimeStorage:
         self.repository.initialize_schema()
         with self.repository._connect() as conn:
             conn.executescript(RUNTIME_SCHEMA)
+            for actor in DEFAULT_ACTORS:
+                conn.execute(
+                    """
+                    INSERT INTO runtime_actors(id, kind, display_name, permissions_json, active)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO NOTHING
+                    """,
+                    (
+                        actor.id,
+                        actor.kind,
+                        actor.display_name,
+                        json.dumps(sorted(actor.permissions)),
+                        int(actor.active),
+                    ),
+                )
+            conn.commit()
+
+    def get_actor(self, actor_id: str) -> RuntimeActor:
+        with self.repository._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM runtime_actors WHERE id = ?", (actor_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(actor_id)
+        return self._row_to_actor(row)
+
+    def list_actors(self) -> list[RuntimeActor]:
+        with self.repository._connect() as conn:
+            rows = conn.execute("SELECT * FROM runtime_actors ORDER BY id").fetchall()
+        return [self._row_to_actor(row) for row in rows]
+
+    def upsert_actor(
+        self,
+        *,
+        actor_id: str,
+        kind: str,
+        display_name: str,
+        permissions: Iterable[str],
+        active: bool = True,
+    ) -> RuntimeActor:
+        if not actor_id or not kind or not display_name:
+            raise ValueError("actor_id, kind and display_name are required")
+        normalized = normalize_permissions(permissions)
+        with self.repository._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO runtime_actors(id, kind, display_name, permissions_json, active)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    kind = excluded.kind,
+                    display_name = excluded.display_name,
+                    permissions_json = excluded.permissions_json,
+                    active = excluded.active
+                """,
+                (
+                    actor_id,
+                    kind,
+                    display_name,
+                    json.dumps(sorted(normalized)),
+                    int(active),
+                ),
+            )
+            conn.commit()
+        return self.get_actor(actor_id)
+
+    def set_actor_permissions(
+        self,
+        actor_id: str,
+        permissions: Iterable[str],
+    ) -> RuntimeActor:
+        actor = self.get_actor(actor_id)
+        return self.upsert_actor(
+            actor_id=actor.id,
+            kind=actor.kind,
+            display_name=actor.display_name,
+            permissions=permissions,
+            active=actor.active,
+        )
+
+    def set_actor_active(self, actor_id: str, active: bool) -> RuntimeActor:
+        actor = self.get_actor(actor_id)
+        return self.upsert_actor(
+            actor_id=actor.id,
+            kind=actor.kind,
+            display_name=actor.display_name,
+            permissions=actor.permissions,
+            active=active,
+        )
 
     def enqueue_command(
         self,
@@ -81,6 +178,7 @@ class RuntimeStorage:
     ) -> RuntimeCommand:
         if not actor_id or not command_type or not idempotency_key:
             raise ValueError("actor_id, command_type and idempotency_key are required")
+        self.get_actor(actor_id)
         created_at = self._utc(created_at_utc)
         payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         command_id = f"CMD-{uuid.uuid4().hex}"
@@ -149,6 +247,7 @@ class RuntimeStorage:
                     command_id,
                 ),
             )
+            conn.commit()
 
     def mark_rejected(self, command_id: str, error_text: str) -> None:
         with self.repository._connect() as conn:
@@ -156,6 +255,7 @@ class RuntimeStorage:
                 "UPDATE runtime_commands SET status = 'rejected', error_text = ? WHERE id = ?",
                 (error_text, command_id),
             )
+            conn.commit()
 
     def was_persisted_as_applied(self, command_id: str) -> bool:
         with self.repository._connect() as conn:
@@ -233,6 +333,7 @@ class RuntimeStorage:
                 """,
                 (now.isoformat(), expires.isoformat(), lease_name, holder_id),
             )
+            conn.commit()
         return cursor.rowcount == 1
 
     def release_lease(
@@ -246,6 +347,16 @@ class RuntimeStorage:
                 "DELETE FROM runtime_writer_lease WHERE lease_name = ? AND holder_id = ?",
                 (lease_name, holder_id),
             )
+            conn.commit()
+
+    def _row_to_actor(self, row: sqlite3.Row) -> RuntimeActor:
+        return RuntimeActor(
+            id=str(row["id"]),
+            kind=str(row["kind"]),
+            display_name=str(row["display_name"]),
+            permissions=frozenset(json.loads(row["permissions_json"])),
+            active=bool(row["active"]),
+        )
 
     def _row_to_command(self, row: sqlite3.Row) -> RuntimeCommand:
         return RuntimeCommand(
