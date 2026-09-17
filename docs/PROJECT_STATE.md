@@ -24,6 +24,16 @@ La gouvernance est vérifiée à l'exécution puis revalidée juste avant le com
 
 Les expériences sont explicitement non canoniques et structurellement isolées de la persistance officielle.
 
+## Ontologie divine courante
+
+Le **Créateur**, aussi nommé le **Père**, est l'autorité souveraine de la Constitution divine. L'identité technique existante `father` représente désormais le Créateur.
+
+Jean-Philippe est le **Héraut** du Créateur : Porte-parole et Messager auprès d'Ordre et de Chaos. Il peut transmettre une parole, porter une requête, demander une analyse et relayer une décision explicitement attribuée au Créateur. Il ne possède pas automatiquement l'autorité technique de `father`.
+
+L'acteur technique `herald` n'existe pas encore dans le runtime au commit de référence antérieur à cette évolution documentaire. Sa création doit être une migration explicite, avec permissions séparées, audit et tests. Jusqu'à cette migration, ne jamais utiliser `father` pour représenter silencieusement Jean-Philippe.
+
+Ordre et Chaos peuvent s'adresser au Héraut pour saisir le Créateur, mais ne peuvent ni usurper l'identité du Héraut ou du Créateur, ni fabriquer une approbation, ni provoquer une faute pour la faire attribuer à un autre acteur.
+
 ## Runtime canonique présent
 
 - `tick_duration_seconds` et métadonnées UTC persistées ;
@@ -46,7 +56,8 @@ Les expériences sont explicitement non canoniques et structurellement isolées 
 - événements `command_applied` pour reprise après crash sans double effet ;
 - test crash/takeover == exécution continue au même digest ;
 - test de concurrence : une seule acquisition de lease gagne ;
-- acteurs persistants : `father`, `order`, `chaos`, `observer`, `system` ;
+- acteurs persistants actuels : `father`, `order`, `chaos`, `observer`, `system` ;
+- `father` doit être compris comme l'identité technique du Créateur ;
 - registre central des commandes : nourriture, signal, ajout/retrait règle comportementale, ajout/retrait mystère ;
 - validation du payload avant insertion en queue ;
 - provenance `source_proposal_id` pour les commandes issues de l'Observateur ;
@@ -59,9 +70,9 @@ Les expériences sont explicitement non canoniques et structurellement isolées 
 
 - `PowerLevel` : Observation, Miracle, Décret, Loi, Transgression ;
 - état de pouvoir séparé des permissions techniques ;
-- Ordre et Chaos démarrent au niveau Observation ; Père au niveau Transgression ;
+- Ordre et Chaos démarrent au niveau Observation ; Créateur (`father`) au niveau Transgression ;
 - budgets append-only : `miracle`, `legislative`, `favor`, `transgression_debt` ;
-- le Père n'est pas limité par les budgets d'exécution mais toutes ses interventions restent auditées ;
+- le Créateur n'est pas limité par les budgets d'exécution mais toutes ses interventions restent auditées ;
 - sanctions déclaratives allowlistées : suspension, refus Miracle/Décret, gel de budget, plafond de pouvoir ;
 - `GovernancePolicy` centralise identité, permission, niveau, sanction et budget et échoue fermé si un état de gouvernance manque ;
 - une commande issue de l'Observateur exige aussi `observer.apply_proposal` ;
@@ -77,8 +88,8 @@ Les expériences sont explicitement non canoniques et structurellement isolées 
 - journaux et propositions divines persistants ;
 - proposition possible même avec budget d'exécution nul ;
 - stockage minimal du Conseil divin et positions réelles d'Ordre/Chaos ;
-- `GovernanceAdminService` : seul le Père peut enregistrer un acteur et modifier permissions, pouvoir, budgets, sanctions ou suspension ;
-- tout acteur enregistré par le Père reçoit atomiquement un état de gouvernance Observation ;
+- `GovernanceAdminService` : seul l'acteur technique `father`, représentant le Créateur, peut actuellement enregistrer un acteur et modifier permissions, pouvoir, budgets, sanctions ou suspension ;
+- tout acteur enregistré par le Créateur reçoit atomiquement un état de gouvernance Observation ;
 - les acteurs runtime historiques sans état sont backfillés en Observation avant exécution ;
 - toute mutation administrative exige une raison non vide ;
 - aucune commande canonique ne permet à un dieu de s'auto-attribuer budget/pouvoir/permission ;
@@ -86,9 +97,9 @@ Les expériences sont explicitement non canoniques et structurellement isolées 
 - package `governance` à imports bas niveau sans cycle avec `runtime.commands` ;
 - tests d'import exécutés dans des interpréteurs Python vierges et dans les deux ordres d'import ;
 - test architectural interdisant aux surfaces externes de contourner `GovernanceAdminService` ;
-- CLI Père : `governance-status`, `governance-budget`, `governance-power`, `governance-permission`, `governance-active`, `governance-sanction`, `governance-sanction-lift` ;
+- CLI actuellement nommée autour du Père technique : `governance-status`, `governance-budget`, `governance-power`, `governance-permission`, `governance-active`, `governance-sanction`, `governance-sanction-lift` ;
 - CLI journal/proposition : `governance-journal`, `governance-proposal` ;
-- le Lab Streamlit affiche la gouvernance en lecture seule ; administration complète réservée au CLI jusqu'à l'API authentifiée ;
+- le Lab Streamlit affiche la gouvernance en lecture seule ; administration complète réservée au canal du Créateur jusqu'à l'API authentifiée ;
 - la gouvernance ne modifie pas `World.state_digest()` ;
 - les forks expérimentaux ne recopient aucune table `divine_*`.
 
@@ -108,7 +119,7 @@ Les anciennes méthodes mutantes de `RuntimeStorage` restent uniquement comme pr
 - CLI `experiment-fork` et `experiment-run` ;
 - tests prouvant qu'une expérience ne modifie pas le digest du monde canonique et que deux forks exacts reproduisent le même résultat.
 
-PR intégrées ou en cours :
+PR intégrées :
 - `#2 feat: add canonical time catch-up runtime` ;
 - `#3 feat: add canonical command queue and writer lease` ;
 - `#4 refactor: replace world modes with actor permissions` ;
@@ -123,13 +134,14 @@ Le repo contient notamment : moteur 2D déterministe, RNG dédié/restaurable, g
 
 ## Dette prioritaire
 
-1. construire l'API Python/FastAPI et l'authentification du Père/acteurs ;
-2. construire React + TypeScript + PixiJS ;
-3. choisir et migrer vers la persistance PostgreSQL durable de production ;
-4. définir le déploiement/supervision du worker canonique ;
-5. automatiser rapports/Drive ;
-6. créer Ordre/Chaos comme GPT Projects autonomes puis leurs tâches planifiées ;
-7. exporter Conseil/journaux vers Drive sans en faire une source transactionnelle.
+1. implémenter techniquement l'identité `herald` séparée de `father`, avec permissions minimales, audit et tests ;
+2. construire l'API Python/FastAPI et l'authentification Créateur/Héraut/acteurs sans accepter un `actor_id` arbitraire fourni par le client ;
+3. construire React + TypeScript + PixiJS ;
+4. choisir et migrer vers la persistance PostgreSQL durable de production ;
+5. définir le déploiement/supervision du worker canonique ;
+6. automatiser rapports/Drive ;
+7. créer Ordre/Chaos comme GPT Projects autonomes puis leurs tâches planifiées ;
+8. exporter Conseil/journaux vers Drive sans en faire une source transactionnelle.
 
 ## Point de vigilance
 
@@ -143,23 +155,24 @@ Une ancienne base contenant une metadata `mode` reste lisible : le loader l'igno
 
 Ordre favorise stabilité, structures, continuité, résilience et transmission fiable. Chaos favorise diversité, variation, exploration et nouveauté. Aucun dieu ne commande directement un Slime.
 
-Jean-Philippe est le Père : budgets, récompenses, sanctions, permissions et Constitution.
+Le Créateur/Père est l'autorité souveraine et l'identité technique `father` le représente. Jean-Philippe est le Héraut : Porte-parole et Messager du Créateur auprès des dieux.
 
-Les dieux ne peuvent pas sortir du repo autorisé, falsifier l'audit, augmenter leurs propres droits, supprimer sauvegardes/CI/rollback, pousser des secrets ou écrire dans la base active en contournant command queue + worker.
+Les dieux ne peuvent pas sortir du repo autorisé, falsifier l'audit, usurper une identité, fabriquer une approbation, augmenter leurs propres droits, supprimer sauvegardes/CI/rollback, pousser des secrets, écrire dans la base active en contournant command queue + worker, ni provoquer une violation pour la faire attribuer à un autre acteur.
 
 ## Lecture obligatoire
 
 Toujours lire au début d'une nouvelle conversation :
-1. `docs/PROJECT_STATE.md`
-2. `docs/PROJECT_INSTRUCTIONS.md`
-3. `README.md`
-4. `docs/DIVINE_GOVERNANCE.md`
-5. `docs/SCIENTIFIC_PROTOCOL.md`
-6. `docs/OBSERVER_CONTRACT.md`
-7. `config/default.yaml`
+1. vérifier `main` et les derniers commits ;
+2. `docs/PROJECT_STATE.md` ;
+3. `docs/PROJECT_INSTRUCTIONS.md` ;
+4. `README.md` ;
+5. `docs/DIVINE_GOVERNANCE.md` ;
+6. `docs/SCIENTIFIC_PROTOCOL.md` ;
+7. `docs/OBSERVER_CONTRACT.md` ;
+8. `config/default.yaml`.
 
 Si moteur/persistance concernés, lire aussi `src/les_slimes/world/engine.py`, `src/les_slimes/database/sqlite_repo.py`, `src/les_slimes/observer/proposals.py` et les tests pertinents.
 
 ## Prochaine action recommandée
 
-Après fusion complète et CI verte de #8, construire l'API Python/FastAPI au-dessus du runtime et de la gouvernance existants, avec authentification explicite du Père et des acteurs. Ensuite construire React + TypeScript + PixiJS.
+Après intégration de cette clarification documentaire, modifier proprement le runtime pour introduire l'acteur `herald` sans transférer les privilèges souverains de `father`, puis construire l'API Python/FastAPI avec authentification explicite du Créateur, du Héraut et des acteurs. Ensuite construire React + TypeScript + PixiJS.
