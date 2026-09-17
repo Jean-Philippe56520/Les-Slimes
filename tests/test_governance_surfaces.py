@@ -1,7 +1,7 @@
 from les_slimes.cli import build_parser
 from les_slimes.config import WorldConfig
 from les_slimes.database.sqlite_repo import SQLiteRepository
-from les_slimes.governance import DivineCouncilStorage
+from les_slimes.governance.council import DivineCouncilStorage
 from les_slimes.world.engine import World
 
 
