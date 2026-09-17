@@ -29,9 +29,22 @@ Les expériences sont explicitement non canoniques et structurellement isolées 
 - catch-up déterministe par batches ;
 - test continu == interruption + reload + catch-up au même digest ;
 - command queue SQLite persistante, ordonnée et idempotente ;
-- lease de writer exclusif ;
+- traitement paginé de toutes les commandes dues avant dépassement de leur date ;
 - `CanonicalWorldWorker` comme chemin unique de mutation externe ;
+- séparation entre temps canonique simulé et wall-clock du processus ;
+- writer lease exclusif avec token de fencing et génération ;
+- validation du lease dans la même transaction SQLite que `save_world` ;
+- un writer expiré/zombie ne peut plus committer après takeover ;
+- heartbeat réel entre batches de catch-up ;
+- `CanonicalWorkerService` pour boucle persistante H24 sur un hôte ;
+- heartbeat maintenu aussi pendant les périodes idle ;
+- identité d'instance unique par défaut ;
+- arrêt propre du service et libération du lease ;
+- métriques de santé : tick, retard, ticks dus, backlog, plus ancienne commande et état du lease ;
+- CLI `worker-run` et `worker-status` ;
 - événements `command_applied` pour reprise après crash sans double effet ;
+- test crash/takeover == exécution continue au même digest ;
+- test de concurrence : une seule acquisition de lease gagne ;
 - acteurs persistants : `father`, `order`, `chaos`, `observer`, `system` ;
 - permissions vérifiées avant application ;
 - registre central des commandes : nourriture, signal, ajout/retrait règle comportementale, ajout/retrait mystère ;
@@ -61,7 +74,8 @@ PR intégrées ou en cours :
 - `#3 feat: add canonical command queue and writer lease` ;
 - `#4 refactor: replace world modes with actor permissions` ;
 - `#5 refactor: enforce canonical command boundary` ;
-- `#6 feat: isolate scientific experiment forks`.
+- `#6 feat: isolate scientific experiment forks` ;
+- `#7 feat: harden canonical world worker for H24`.
 
 ## État technique moteur
 
@@ -69,17 +83,17 @@ Le repo contient notamment : moteur 2D déterministe, RNG dédié/restaurable, g
 
 ## Dette prioritaire
 
-1. durcir le worker H24 : heartbeat réel pendant longs catch-up, supervision, reprise et tests de concurrence ;
-2. brancher budgets/sanctions/journaux divins sur les permissions ;
-3. construire l'API Python ;
-4. construire React + TypeScript + PixiJS ;
-5. choisir la persistance PostgreSQL de production ;
+1. brancher budgets/sanctions/journaux divins sur les permissions ;
+2. construire l'API Python ;
+3. construire React + TypeScript + PixiJS ;
+4. choisir et migrer vers la persistance PostgreSQL durable de production ;
+5. définir le déploiement/supervision du worker canonique ;
 6. automatiser rapports/Drive ;
 7. créer Ordre/Chaos comme GPT Projects autonomes puis leurs tâches planifiées.
 
 ## Point de vigilance
 
-Le monde n'est pas encore prêt pour production H24. Le worker doit encore être durci avant exposition réseau.
+Le runtime SQLite est maintenant conçu et testé pour un fonctionnement continu contrôlé sur un hôte unique, avec fencing, heartbeat, takeover et reprise déterministe. Cela ne signifie pas encore que l'ensemble est prêt pour une production publique H24 : la persistance durable distante, l'orchestration/supervision du processus, les sauvegardes opérationnelles et l'exposition réseau restent à définir.
 
 Une ancienne base contenant une metadata `mode` reste lisible : le loader l'ignore et la clé est supprimée au prochain `save_world`.
 
@@ -106,4 +120,4 @@ Si moteur/persistance concernés, lire aussi `src/les_slimes/world/engine.py`, `
 
 ## Prochaine action recommandée
 
-Durcir le World Worker H24 : heartbeat réel, renouvellement du lease pendant longs catch-up, boucle/supervision, crash recovery et tests de concurrence. Ne pas démarrer React/PixiJS avant ce verrou.
+Construire la gouvernance divine persistante : budgets, sanctions, journaux et règles d'autorisation dynamiques pour Ordre, Chaos et le Père. Ensuite construire l'API Python, puis React + TypeScript + PixiJS.
