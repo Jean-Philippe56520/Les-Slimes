@@ -9,6 +9,8 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
+from fastapi.middleware.cors import CORSMiddleware
+
 from .api.app import create_app
 from .config import WorldConfig
 from .database.factory import DATABASE_URL_ENV, canonical_repository_from_env
@@ -17,6 +19,8 @@ from .database.postgres_repo import PostgreSQLRepository
 from .database.sqlite_repo import SQLiteRepository
 from .runtime import CanonicalRuntime, CanonicalWorkerService, RuntimeStorage, WorkerServiceConfig
 from .world.engine import World
+
+CORS_ORIGINS_ENV = "LES_SLIMES_CORS_ORIGINS"
 
 
 def _float_env(name: str, default: float) -> float:
@@ -29,9 +33,24 @@ def _int_env(name: str, default: int) -> int:
     return int(raw) if raw not in (None, "") else default
 
 
+def _cors_origins_from_env() -> list[str]:
+    raw = os.getenv(CORS_ORIGINS_ENV, "")
+    return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+
+
 def create_api_app():
     """Uvicorn factory using the configured canonical persistence backend."""
-    return create_app(canonical_repository_from_env())
+    app = create_app(canonical_repository_from_env())
+    origins = _cors_origins_from_env()
+    if origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
+    return app
 
 
 def _service() -> CanonicalWorkerService:
