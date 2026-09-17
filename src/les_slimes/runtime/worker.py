@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ..database.sqlite_repo import SQLiteRepository
+from .actors import permission_for_command
 from .canonical import AdvanceResult, CanonicalRuntime
 from .storage import RuntimeCommand, RuntimeStorage
 
@@ -72,6 +73,7 @@ class CanonicalWorldWorker:
                 self.runtime.advance_to(command.created_at_utc)
                 world = self.repository.load_world()
                 try:
+                    self._authorize(command)
                     result = self._apply_to_world(world, command)
                 except (KeyError, TypeError, ValueError, PermissionError) as exc:
                     self.storage.mark_rejected(command.id, str(exc))
@@ -109,6 +111,16 @@ class CanonicalWorldWorker:
             )
         finally:
             self.storage.release_lease(holder_id=self.holder_id)
+
+    def _authorize(self, command: RuntimeCommand) -> None:
+        actor = self.storage.get_actor(command.actor_id)
+        if not actor.active:
+            raise PermissionError(f"Actor {actor.id!r} is inactive")
+        permission = permission_for_command(command.command_type)
+        if not actor.can(permission):
+            raise PermissionError(
+                f"Actor {actor.id!r} lacks permission {permission.value!r}"
+            )
 
     @staticmethod
     def _apply_to_world(world, command: RuntimeCommand) -> dict[str, Any]:
