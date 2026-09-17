@@ -1,6 +1,7 @@
 seed: 428719
 width: 120.0
 height: 80.0
+tick_duration_seconds: 1.0
 initial_slimes: 100
 initial_food: 180
 max_food: 260
