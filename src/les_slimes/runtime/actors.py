@@ -15,12 +15,6 @@ class ActorPermission(StrEnum):
     APPLY_OBSERVER_PROPOSAL = "observer.apply_proposal"
 
 
-COMMAND_PERMISSIONS: dict[str, ActorPermission] = {
-    "deposit_food": ActorPermission.DEPOSIT_FOOD,
-    "emit_signal": ActorPermission.EMIT_SIGNAL,
-}
-
-
 @dataclass(frozen=True, slots=True)
 class RuntimeActor:
     id: str
@@ -79,10 +73,3 @@ def normalize_permissions(permissions: Iterable[str | ActorPermission]) -> froze
             raise ValueError(f"Unknown actor permission: {value}")
         normalized.add(value)
     return frozenset(normalized)
-
-
-def permission_for_command(command_type: str) -> ActorPermission:
-    try:
-        return COMMAND_PERMISSIONS[command_type]
-    except KeyError as exc:
-        raise ValueError(f"Unsupported canonical command type: {command_type}") from exc
