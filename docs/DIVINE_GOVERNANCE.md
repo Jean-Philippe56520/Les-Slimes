@@ -17,7 +17,7 @@ Le monde canonique ne change jamais de mode.
 
 Toute mutation externe officielle passe par : acteur -> command queue persistante -> `CanonicalWorldWorker` -> `GovernancePolicy` -> moteur Python -> persistance atomique monde + intervention + budget + audit.
 
-La gouvernance est vérifiée lors de l'exécution puis revalidée juste avant le commit. Une commande déjà mise en queue peut donc être refusée si une permission, un niveau, un budget ou une sanction a changé entre-temps ; ce refus reste auditable.
+La gouvernance est vérifiée lors de l'exécution puis revalidée juste avant le commit. Une commande déjà mise en queue peut donc être refusée si une permission, un niveau, un budget ou une sanction a changé entre-temps. Une fois ce refus persisté, il est terminal : une évolution ultérieure de la gouvernance nécessite une nouvelle commande et ne peut pas ressusciter l'ancienne.
 
 Les expériences, benchmarks et tests utilisent des forks explicitement non canoniques, isolés et incapables d'écrire dans le monde réel. Ils ne recopient pas la gouvernance active.
 
@@ -82,6 +82,8 @@ Budgets persistants actuels :
 
 Les budgets utilisent un ledger append-only : chaque allocation, récompense ou dépense reste dans l'historique. Un budget nul n'interdit pas de proposer ; il interdit l'exécution autonome normale correspondante.
 
+Une contrainte SQLite garantit qu'une même intervention ne peut produire qu'un seul débit négatif, même si un futur bug Python tente de la rejouer.
+
 La faveur n'accorde automatiquement aucun droit ni budget. Une éventuelle conversion devra être définie explicitement par une loi future.
 
 ## Sanctions
@@ -97,7 +99,23 @@ Sanctions allowlistées actuelles :
 
 Une sanction peut avoir une date d'expiration ou être levée par le Père. Aucun code arbitraire n'est accepté dans une sanction.
 
-## Atomicité des interventions
+## Cycle de vie d'une intervention
+
+États autorisés : `proposed`, `authorized`, `executed`, `rejected`, `cancelled`, `transgression`.
+
+Les états suivants sont terminaux :
+
+- `executed` ;
+- `rejected` ;
+- `cancelled`.
+
+Des triggers SQLite empêchent toute transition depuis un état terminal vers un autre état. En particulier, `rejected -> executed` est impossible.
+
+Le rejet d'une commande et celui de son intervention sont persistés dans **la même transaction SQLite**, avec l'entrée d'audit. Un crash au milieu de cette transaction rollback l'ensemble : on n'obtient jamais volontairement un état `intervention rejected / command pending` issu du chemin normal.
+
+Les anciennes incohérences éventuelles sont traitées défensivement : si une commande pending référence déjà une intervention `rejected` ou `cancelled`, le Worker termine la commande comme rejetée sans mutation du monde ni dépense.
+
+## Atomicité des interventions réussies
 
 Pour une mutation divine canonique, le Worker revalide juste avant le commit :
 
@@ -124,21 +142,32 @@ Une intervention issue d'une proposition Observateur exige simultanément :
 
 L'identité de l'Observateur ne prête jamais ses droits à l'acteur approbateur.
 
-## Administration
+## Administration et cycle de vie des acteurs
 
-`GovernanceAdminService` est le chemin de confiance pour modifier :
+`GovernanceAdminService` est le chemin de confiance pour :
 
-- permissions ;
-- activation/suspension technique ;
-- niveau de pouvoir ;
-- budgets ;
-- sanctions.
+- enregistrer un nouvel acteur ;
+- modifier ses permissions ;
+- activer/suspendre techniquement l'acteur ;
+- modifier son niveau de pouvoir ;
+- modifier ses budgets ;
+- imposer ou lever ses sanctions.
 
-Dans la phase actuelle, seul `father` est accepté comme administrateur.
+Dans la phase actuelle, seul `father` est accepté comme administrateur. Toute mutation administrative exige une raison non vide et produit une entrée d'audit.
+
+Un acteur enregistré par le Père reçoit dans la même transaction son `RuntimeActor` et un état de gouvernance au niveau Observation. Les acteurs runtime historiques dépourvus d'état sont backfillés au niveau Observation avant le traitement canonique.
+
+Les anciennes primitives mutantes de `RuntimeStorage` sont conservées uniquement pour compatibilité/migration interne. Elles ne sont pas un canal d'administration autorisé ; les surfaces externes sont testées pour ne jamais les appeler.
 
 Aucune commande canonique ne permet à Ordre ou Chaos d'augmenter ses propres permissions, budgets, niveau de pouvoir ou de retirer ses sanctions.
 
 L'administration est exposée par CLI Père jusqu'à la création de l'API authentifiée. Streamlit affiche la gouvernance en lecture seule.
+
+## Imports et frontière logicielle
+
+`governance/__init__.py` reste volontairement minimal et n'importe ni policy, ni service, ni storage. `runtime.commands` peut donc importer les enums de `governance.models` sans créer de cycle d'import.
+
+La CI vérifie les imports depuis des interpréteurs Python vierges dans plusieurs ordres de chargement. Un test architectural vérifie également que le Lab, le CLI principal et l'Observateur ne modifient pas directement les tables ou primitives d'administration de la gouvernance.
 
 ## Audit et journaux
 
