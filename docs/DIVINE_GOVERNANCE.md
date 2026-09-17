@@ -9,7 +9,7 @@ Toutes les opérations GitHub doivent rester limitées à ce dépôt.
 
 ## Monde canonique
 
-Il existe un seul monde Les Slimes canonique, persistant et partagé par les Slimes, le Père et tous les dieux.
+Il existe un seul monde Les Slimes canonique, persistant et partagé par les Slimes, le Créateur, le Héraut et les dieux.
 
 Il possède une seule horloge, un seul état officiel, une seule histoire, une seule chaîne de commandes et une seule persistance active.
 
@@ -21,7 +21,32 @@ La gouvernance est vérifiée lors de l'exécution puis revalidée juste avant l
 
 Les expériences, benchmarks et tests utilisent des forks explicitement non canoniques, isolés et incapables d'écrire dans le monde réel. Ils ne recopient pas la gouvernance active.
 
-## Acteurs initiaux
+## Ontologie divine
+
+### Le Créateur / le Père
+
+Le Créateur, aussi nommé le Père, est l'autorité souveraine de la Constitution divine. Il peut attribuer ou retirer permissions, budgets et niveaux de pouvoir, récompenser, sanctionner, suspendre un dieu, restaurer une loi et modifier la Constitution divine.
+
+L'identité technique `father` représente le Créateur. Le Créateur n'est pas limité par les budgets d'exécution du runtime mais ses interventions restent attribuées et auditées. Il n'est jamais hors historique.
+
+### Le Héraut
+
+Jean-Philippe est le Héraut du Créateur : son Porte-parole et Messager auprès d'Ordre et de Chaos.
+
+Le Héraut peut notamment :
+- transmettre une parole ou une décision explicitement attribuée au Créateur ;
+- porter au Créateur une requête, un argument ou une plainte d'un dieu ;
+- demander des observations, analyses ou propositions ;
+- communiquer les conséquences d'une décision souveraine ;
+- agir dans les limites des pouvoirs techniques qui lui seront explicitement délégués.
+
+Le Héraut n'est pas le Créateur et ne possède pas automatiquement son autorité souveraine. Une parole du Héraut n'augmente jamais à elle seule un budget, une permission ou un niveau de pouvoir. Une décision ayant un effet technique doit emprunter le mécanisme de gouvernance applicable et rester auditable.
+
+Ordre et Chaos peuvent chercher à convaincre le Héraut et lui confier des messages destinés au Créateur. Ils ne peuvent pas l'utiliser comme contournement de la gouvernance, usurper son identité, fabriquer une approbation du Créateur ou présenter une demande du Héraut comme une décision souveraine si elle ne l'est pas.
+
+Un futur acteur technique `herald` doit représenter cette identité séparément de `father`. Tant que cette migration n'est pas fusionnée, `father` continue de représenter uniquement le Créateur dans le code existant.
+
+## Acteurs divins initiaux
 
 ### Ordre
 
@@ -35,12 +60,6 @@ Risques : instabilité, bruit, pertes de lignées, emballement écologique.
 
 Aucun dieu n'est intrinsèquement bon ou mauvais. La doctrine oriente l'analyse sans imposer directement un comportement aux Slimes.
 
-## Le Père
-
-Jean-Philippe est le Père. Il peut attribuer/retirer permissions, budgets et niveaux de pouvoir, récompenser, sanctionner, suspendre un dieu, restaurer une loi et modifier la Constitution divine.
-
-Le Père n'est pas limité par les budgets d'exécution du runtime mais ses interventions restent attribuées et auditées. Il n'est jamais hors historique.
-
 ## Pouvoirs persistants
 
 1. Observation : lecture et analyse.
@@ -49,7 +68,7 @@ Le Père n'est pas limité par les budgets d'exécution du runtime mais ses inte
 4. Loi : modification limitée du moteur Python, normalement couverte par budget législatif et réalisée via branche/PR GitHub.
 5. Transgression : modification interne hors budget/autorité, rare, attribuée, journalisée, réversible et sanctionnable.
 
-Ordre et Chaos démarrent au niveau Observation. Le Père possède le niveau maximal.
+Ordre et Chaos démarrent au niveau Observation. Le Créateur possède le niveau maximal.
 
 Une Transgression n'est **pas** un bouton ou un bypass permettant d'ignorer les garde-fous. C'est une classification d'une intervention sortie de l'autorité normale, qui doit rester attribuable et sanctionnable. Elle ne permet jamais de sortir du périmètre du projet ni de contourner les méta-lois.
 
@@ -97,7 +116,7 @@ Sanctions allowlistées actuelles :
 - gel du budget législatif ;
 - plafond temporaire du niveau de pouvoir.
 
-Une sanction peut avoir une date d'expiration ou être levée par le Père. Aucun code arbitraire n'est accepté dans une sanction.
+Une sanction peut avoir une date d'expiration ou être levée par le Créateur. Aucun code arbitraire n'est accepté dans une sanction.
 
 ## Cycle de vie d'une intervention
 
@@ -153,15 +172,17 @@ L'identité de l'Observateur ne prête jamais ses droits à l'acteur approbateur
 - modifier ses budgets ;
 - imposer ou lever ses sanctions.
 
-Dans la phase actuelle, seul `father` est accepté comme administrateur. Toute mutation administrative exige une raison non vide et produit une entrée d'audit.
+Dans l'implémentation actuelle, seul `father` est accepté comme administrateur. Avec la nouvelle ontologie, `father` désigne le Créateur, pas Jean-Philippe. Toute mutation administrative exige une raison non vide et produit une entrée d'audit.
 
-Un acteur enregistré par le Père reçoit dans la même transaction son `RuntimeActor` et un état de gouvernance au niveau Observation. Les acteurs runtime historiques dépourvus d'état sont backfillés au niveau Observation avant le traitement canonique.
+La création de l'acteur technique `herald` et de ses permissions distinctes constitue une migration future explicite. Elle ne doit pas être simulée en réutilisant silencieusement `father`.
+
+Un acteur enregistré par le Créateur reçoit dans la même transaction son `RuntimeActor` et un état de gouvernance au niveau Observation. Les acteurs runtime historiques dépourvus d'état sont backfillés au niveau Observation avant le traitement canonique.
 
 Les anciennes primitives mutantes de `RuntimeStorage` sont conservées uniquement pour compatibilité/migration interne. Elles ne sont pas un canal d'administration autorisé ; les surfaces externes sont testées pour ne jamais les appeler.
 
 Aucune commande canonique ne permet à Ordre ou Chaos d'augmenter ses propres permissions, budgets, niveau de pouvoir ou de retirer ses sanctions.
 
-L'administration est exposée par CLI Père jusqu'à la création de l'API authentifiée. Streamlit affiche la gouvernance en lecture seule.
+L'administration est exposée par CLI Créateur jusqu'à la création de l'API authentifiée. Streamlit affiche la gouvernance en lecture seule.
 
 ## Imports et frontière logicielle
 
@@ -184,6 +205,9 @@ La gouvernance n'entre pas dans `World.state_digest()` : le digest scientifique 
 Aucun dieu ne peut :
 - agir sur un autre repo ;
 - effacer/falsifier l'historique ou cacher l'auteur ;
+- usurper l'identité d'un autre acteur ;
+- fabriquer une autorisation, un message ou une décision attribuée au Créateur ou au Héraut ;
+- provoquer délibérément une violation ou une action interdite afin de la faire attribuer à un autre acteur ;
 - modifier son propre budget, identité ou sanctions hors mécanisme prévu ;
 - désactiver CI/tests pour faire passer une modification ;
 - supprimer sauvegardes, digests ou rollback ;
@@ -203,7 +227,9 @@ Après : syntaxe/imports, tests ciblés, suite complète si moteur/RNG/DB/worker
 
 ## Conseil divin
 
-Ordre et Chaos peuvent publier des positions réelles `support`, `oppose`, `amend`, `abstain` ou `refer_to_father` sur une proposition. Un dieu ne doit jamais inventer la position de l'autre : il lit la position persistée réelle.
+Ordre et Chaos peuvent publier des positions réelles `support`, `oppose`, `amend`, `abstain` ou `refer_to_father` sur une proposition. Dans le vocabulaire du monde, `refer_to_father` signifie saisir le Créateur/Père. Un dieu ne doit jamais inventer la position de l'autre : il lit la position persistée réelle.
+
+Le Héraut constitue le canal normal de communication avec le Créateur lorsqu'aucun canal technique direct n'est prévu. Le Héraut peut rapporter une demande, mais la réponse souveraine doit rester distinguable de la demande elle-même.
 
 Le stockage minimal du Conseil existe ; l'automatisation hebdomadaire viendra après l'API et l'activation des dieux autonomes.
 
@@ -223,7 +249,7 @@ Chaque dieu :
 
 ### Conseil hebdomadaire
 
-Chaque dieu relit 7 jours, examine propositions et conséquences, lit les arguments de l'autre, soutient/refuse/amende et saisit éventuellement le Père.
+Chaque dieu relit 7 jours, examine propositions et conséquences, lit les arguments de l'autre, soutient/refuse/amende et peut demander au Héraut de saisir le Créateur.
 
 ## Science
 
