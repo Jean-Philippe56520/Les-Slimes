@@ -152,9 +152,8 @@ def build_world_report(world: World) -> dict[str, Any]:
     )[:10]
 
     return {
-        "schema_version": "0.2",
+        "schema_version": "0.3",
         "tick": world.tick,
-        "mode": world.mode.value,
         "seed": world.config.seed,
         "state_digest": world.state_digest(),
         "metrics": asdict(metrics),

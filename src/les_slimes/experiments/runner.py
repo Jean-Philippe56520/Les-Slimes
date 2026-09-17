@@ -9,7 +9,6 @@ from typing import Iterable
 from ..analytics import build_world_report
 from ..config import WorldConfig
 from ..world.engine import World
-from ..world.modes import WorldMode
 
 
 def run_batch(
@@ -23,12 +22,14 @@ def run_batch(
     results: list[dict] = []
     for seed in seeds:
         cfg = replace(base_config, seed=int(seed))
-        world = World(cfg, mode=WorldMode.EXPERIMENT)
+        world = World(cfg)
         world.step(ticks)
         report = build_world_report(world)
         metrics = asdict(world.metrics())
         results.append(
             {
+                "canonical": False,
+                "execution_scope": "non_canonical_experiment",
                 "seed": seed,
                 "ticks": ticks,
                 "digest": world.state_digest(),

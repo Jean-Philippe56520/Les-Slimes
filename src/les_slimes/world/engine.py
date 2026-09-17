@@ -14,7 +14,6 @@ from ..cognition.rules import BehaviorRule, rule_matches, validate_rule_payload
 from ..config import WorldConfig
 from ..entities import Food, HeardSignal, Relation, Slime
 from ..events import Event
-from .modes import WorldMode
 from .mysteries import MysteryObject, validate_mystery_payload
 from .spatial import SpatialFoodIndex, SpatialSlimeIndex
 
@@ -39,11 +38,9 @@ class World:
         config: WorldConfig,
         *,
         initialize: bool = True,
-        mode: str | WorldMode = WorldMode.SANDBOX,
     ) -> None:
         config.validate()
         self.config = config
-        self.mode = WorldMode.parse(mode)
         self.rng = random.Random(config.seed)
         self.tick = 0
         self.slimes: dict[str, Slime] = {}
@@ -150,16 +147,9 @@ class World:
             )
         )
 
-    def _require_sandbox(self) -> None:
-        if self.mode is not WorldMode.SANDBOX:
-            raise PermissionError(
-                f"External world modification is disabled in {self.mode.value!r} mode"
-            )
-
     def add_behavior_rule(
         self, payload: dict, *, source: str = "manual"
     ) -> BehaviorRule:
-        self._require_sandbox()
         validate_rule_payload(payload, require_id=False)
         rule_id = f"RULE-{self.next_rule_number:06d}"
         self.next_rule_number += 1
@@ -176,7 +166,6 @@ class World:
         return rule
 
     def remove_behavior_rule(self, rule_id: str) -> None:
-        self._require_sandbox()
         if rule_id not in self.behavior_rules:
             raise KeyError(rule_id)
         rule = self.behavior_rules.pop(rule_id)
@@ -185,7 +174,6 @@ class World:
     def add_mystery(
         self, payload: dict, *, source: str = "manual"
     ) -> MysteryObject:
-        self._require_sandbox()
         validate_mystery_payload(payload, require_id=False)
         mystery_id = f"MYS-{self.next_mystery_number:06d}"
         self.next_mystery_number += 1
@@ -201,14 +189,12 @@ class World:
         return mystery
 
     def remove_mystery(self, mystery_id: str) -> None:
-        self._require_sandbox()
         if mystery_id not in self.mysteries:
             raise KeyError(mystery_id)
         mystery = self.mysteries.pop(mystery_id)
         self._emit("mystery_removed", payload=mystery.public_dict())
 
     def player_deposit_food(self, x: float, y: float, count: int = 1) -> list[int]:
-        self._require_sandbox()
         if count < 1 or count > 100:
             raise ValueError("count must be in [1, 100]")
         ids: list[int] = []
@@ -233,7 +219,6 @@ class World:
         y: float,
         radius: float | None = None,
     ) -> int:
-        self._require_sandbox()
         self._validate_signal(signal)
         return self._broadcast_signal(
             signal=signal,
@@ -799,7 +784,6 @@ class World:
     def state_digest(self) -> str:
         state = {
             "tick": self.tick,
-            "mode": self.mode.value,
             "next_slime_number": self.next_slime_number,
             "next_food_id": self.next_food_id,
             "next_rule_number": self.next_rule_number,

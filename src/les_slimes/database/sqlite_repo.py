@@ -206,7 +206,7 @@ class SQLiteRepository:
             conn.execute("BEGIN IMMEDIATE")
 
             self._set_meta(conn, "config", cfg_json)
-            self._set_meta(conn, "mode", world.mode.value.encode("ascii"))
+            conn.execute("DELETE FROM metadata WHERE key='mode'")
             self._set_meta(conn, "tick", self._int_bytes(world.tick))
             self._set_meta(
                 conn, "next_slime_number", self._int_bytes(world.next_slime_number)
@@ -431,10 +431,7 @@ class SQLiteRepository:
             if isinstance(config_raw, bytes):
                 config_raw = config_raw.decode("utf-8")
             config = WorldConfig.from_dict(json.loads(config_raw))
-            mode_raw = meta.get("mode", b"sandbox")
-            if isinstance(mode_raw, bytes):
-                mode_raw = mode_raw.decode("ascii")
-            world = World(config, initialize=False, mode=mode_raw)
+            world = World(config, initialize=False)
 
             world.tick = int(bytes(meta["tick"]).decode("ascii"))
             world.next_slime_number = int(

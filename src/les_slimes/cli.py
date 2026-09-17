@@ -10,7 +10,6 @@ from .config import WorldConfig
 from .database.sqlite_repo import SQLiteRepository
 from .observer import ObserverProposal, apply_proposal
 from .world.engine import World
-from .world.modes import WorldMode
 
 
 def _default_config_path() -> Path:
@@ -20,7 +19,6 @@ def _default_config_path() -> Path:
 def _metrics_dict(world: World) -> dict[str, int | float | str]:
     m = world.metrics()
     return {
-        "mode": world.mode.value,
         "tick": m.tick,
         "population": m.population,
         "food_count": m.food_count,
@@ -44,7 +42,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         Path(f"{db}-shm").unlink(missing_ok=True)
 
     config = WorldConfig.from_yaml(args.config)
-    world = World(config, mode=args.mode)
+    world = World(config)
     repo = SQLiteRepository(db)
     repo.save_world(world)
     print(json.dumps(_metrics_dict(world), indent=2))
@@ -156,9 +154,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--db", default="data/world.sqlite")
     p_init.add_argument("--config", default=str(_default_config_path()))
     p_init.add_argument("--force", action="store_true")
-    p_init.add_argument(
-        "--mode", choices=[mode.value for mode in WorldMode], default=WorldMode.SANDBOX.value
-    )
     p_init.set_defaults(func=cmd_init)
 
     p_sim = sub.add_parser("simulate", help="Advance a saved world")
