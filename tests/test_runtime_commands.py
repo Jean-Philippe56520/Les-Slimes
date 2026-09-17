@@ -17,6 +17,7 @@ def build_repo(tmp_path):
                 initial_slimes=12,
                 initial_food=20,
                 max_food=60,
+                food_spawn_probability=0.0,
                 tick_duration_seconds=1.0,
             )
         )
@@ -68,7 +69,7 @@ def test_worker_applies_command_in_time_order_and_advances_world(tmp_path):
     start = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
     CanonicalRuntime(repo).ensure_initialized(start)
     storage = RuntimeStorage(repo)
-    initial_food = len(repo.load_world().foods)
+    initial_next_food_id = repo.load_world().next_food_id
 
     storage.enqueue_command(
         actor_id="father",
@@ -86,7 +87,7 @@ def test_worker_applies_command_in_time_order_and_advances_world(tmp_path):
     assert result.commands_applied == 1
     assert result.commands_rejected == 0
     assert world.tick == 10
-    assert len(world.foods) >= initial_food + 3
+    assert world.next_food_id >= initial_next_food_id + 3
     assert storage.pending_commands() == []
 
 
