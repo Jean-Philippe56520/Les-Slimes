@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -5,15 +6,9 @@ import pytest
 from les_slimes.config import WorldConfig
 from les_slimes.database.sqlite_repo import SQLiteRepository
 from les_slimes.experiments import create_experiment_fork
-from les_slimes.governance import (
-    BudgetKind,
-    DivineGovernanceService,
-    GovernanceAdminService,
-    GovernanceStorage,
-    JournalEntryType,
-    PowerLevel,
-    SanctionType,
-)
+from les_slimes.governance.models import BudgetKind, JournalEntryType, PowerLevel, SanctionType
+from les_slimes.governance.service import DivineGovernanceService, GovernanceAdminService
+from les_slimes.governance.storage import GovernanceStorage
 from les_slimes.runtime import ActorPermission, CanonicalRuntime, CanonicalWorldWorker, RuntimeStorage
 from les_slimes.world.engine import World
 
@@ -57,6 +52,24 @@ def test_default_gods_are_observation_only(tmp_path):
     assert governance.get_actor_state("father").max_power_level == PowerLevel.TRANSGRESSION
 
 
+def test_father_registers_custom_actor_with_observation_state_and_audit(tmp_path):
+    repo = build_repo(tmp_path)
+    start = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+    admin = GovernanceAdminService(repo)
+    actor = admin.register_actor(
+        actor_id="guest-god",
+        kind="god",
+        display_name="Guest God",
+        permissions=[ActorPermission.DEPOSIT_FOOD],
+        reason="temporary research actor",
+        now_utc=start,
+    )
+    assert actor.id == "guest-god"
+    assert actor.can(ActorPermission.DEPOSIT_FOOD)
+    assert admin.storage.get_actor_state("guest-god").max_power_level == PowerLevel.OBSERVATION
+    assert admin.storage.validate_audit_chain()
+
+
 def test_budget_is_debited_exactly_once_on_success(tmp_path):
     repo = build_repo(tmp_path)
     start = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
@@ -86,6 +99,27 @@ def test_budget_is_debited_exactly_once_on_success(tmp_path):
     assert intervention["status"] == "executed"
     assert len(ledger) == 1
     assert ledger[0]["delta"] == -1
+
+    with pytest.raises(sqlite3.IntegrityError):
+        with repo._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO divine_budget_ledger(
+                    actor_id, budget_kind, delta, reason, performed_by,
+                    intervention_id, created_at_utc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "order",
+                    BudgetKind.MIRACLE.value,
+                    -1,
+                    "duplicate debit",
+                    "order",
+                    intervention["id"],
+                    start.isoformat(),
+                ),
+            )
+            conn.commit()
 
 
 def test_zero_budget_rejects_without_world_mutation(tmp_path):
@@ -134,7 +168,7 @@ def test_miracle_sanction_blocks_action_without_spending_budget(tmp_path):
     assert admin.storage.budget_balance("order", BudgetKind.MIRACLE) == 1
 
 
-def test_expired_sanction_no_longer_blocks(tmp_path):
+def test_expired_sanction_no_longer_blocks_command_not_previously_rejected(tmp_path):
     repo = build_repo(tmp_path)
     start = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
     later = start + timedelta(minutes=2)
@@ -159,6 +193,61 @@ def test_expired_sanction_no_longer_blocks(tmp_path):
     result = CanonicalWorldWorker(repo, holder_id="g4", clock=lambda: later).run_until(later)
     assert result.commands_applied == 1
     assert admin.storage.budget_balance("order", BudgetKind.MIRACLE) == 0
+
+
+def test_rejected_intervention_cannot_resurrect_after_policy_changes(tmp_path):
+    repo = build_repo(tmp_path)
+    start = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+    later = start + timedelta(minutes=2)
+    CanonicalRuntime(repo).ensure_initialized(start)
+    admin = grant_miracle(repo, "order", start, budget=1)
+    sanction = admin.impose_sanction(
+        "order",
+        SanctionType.DENY_MIRACLE,
+        reason="temporary block",
+        now_utc=start,
+    )
+    storage = RuntimeStorage(repo)
+    command = storage.enqueue_command(
+        actor_id="order",
+        command_type="deposit_food",
+        payload={"x": 7.0, "y": 8.0, "count": 1},
+        idempotency_key="terminal-rejection",
+        created_at_utc=start,
+    )
+    before = repo.load_world().state_digest()
+
+    first = CanonicalWorldWorker(repo, holder_id="reject-once", clock=lambda: start).run_until(start)
+    assert first.commands_rejected == 1
+    intervention = admin.storage.get_intervention_for_command(command.id)
+    assert intervention is not None and intervention.status == "rejected"
+
+    # Recreate the historical crash inconsistency: intervention persisted as rejected
+    # but command status remained pending. The terminal intervention must still win.
+    with repo._connect() as conn:
+        conn.execute(
+            "UPDATE runtime_commands SET status = 'pending', error_text = NULL WHERE id = ?",
+            (command.id,),
+        )
+        conn.commit()
+    admin.lift_sanction(sanction.id, reason="sanction expired for test", now_utc=later)
+
+    second = CanonicalWorldWorker(repo, holder_id="recover-reject", clock=lambda: later).run_until(later)
+    assert second.commands_applied == 0
+    assert second.commands_rejected == 1
+    assert admin.storage.get_intervention_for_command(command.id).status == "rejected"
+    assert admin.storage.budget_balance("order", BudgetKind.MIRACLE) == 1
+    assert repo.load_world().state_digest() != before  # time advanced, but command never mutated food
+    with repo._connect() as conn:
+        command_row = conn.execute(
+            "SELECT status FROM runtime_commands WHERE id = ?", (command.id,)
+        ).fetchone()
+        deposits = conn.execute(
+            "SELECT COUNT(*) AS count FROM divine_budget_ledger WHERE intervention_id = ? AND delta < 0",
+            (intervention.id,),
+        ).fetchone()
+    assert command_row["status"] == "rejected"
+    assert deposits["count"] == 0
 
 
 def test_observer_proposal_requires_double_permission(tmp_path):
@@ -213,7 +302,6 @@ def test_crash_after_world_commit_does_not_double_debit(tmp_path, monkeypatch):
     )
 
     worker = CanonicalWorldWorker(repo, holder_id="crashing", clock=lambda: start)
-    original_mark = worker.storage.mark_applied
 
     def crash_mark(*args, **kwargs):
         raise RuntimeError("simulated status crash")
@@ -279,6 +367,13 @@ def test_only_father_can_administer_governance(tmp_path):
             reason="self grant",
             performed_by="chaos",
         )
+
+
+def test_governance_admin_requires_non_empty_reason(tmp_path):
+    repo = build_repo(tmp_path)
+    admin = GovernanceAdminService(repo)
+    with pytest.raises(ValueError, match="reason"):
+        admin.adjust_budget("order", BudgetKind.MIRACLE, 1, reason="   ")
 
 
 def test_proposals_and_journals_do_not_require_execution_budget(tmp_path):
