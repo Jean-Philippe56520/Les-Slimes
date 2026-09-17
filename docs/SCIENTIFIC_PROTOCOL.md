@@ -8,8 +8,11 @@ Toute expérience doit enregistrer :
 - seed ;
 - configuration complète ;
 - nombre de ticks ;
-- mode d'exécution ;
+- contexte d'exécution non canonique ;
+- tick/digest du snapshot source si l'expérience dérive du monde canonique ;
 - digest initial et final.
+
+Une expérience n'est jamais un « mode » du monde canonique. Elle s'exécute sur une copie/fork explicitement non canonique qui ne doit pas pouvoir écrire dans la persistance officielle.
 
 ## Interprétation
 
@@ -33,6 +36,8 @@ Pour un comportement candidat :
 6. reproduire sur plusieurs seeds ;
 7. seulement ensuite le qualifier d'apprentissage/culture potentielle.
 
-## LLM futur
+Toute intervention humaine ou divine est enregistrée comme facteur expérimental.
+
+## LLM
 
 Le LLM ne doit jamais être utilisé comme preuve d'un phénomène. Il peut proposer une hypothèse, mais les métriques du moteur doivent la tester.
