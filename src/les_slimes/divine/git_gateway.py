@@ -63,6 +63,10 @@ class GitProvider(Protocol):
         self, repository_full_name: str, pr_number: int
     ) -> PullRequestSnapshot: ...
 
+    def list_pull_request_files(
+        self, repository_full_name: str, pr_number: int
+    ) -> tuple[str, ...]: ...
+
     def get_passed_checks(
         self, repository_full_name: str, commit_sha: str
     ) -> frozenset[str]: ...
@@ -79,20 +83,28 @@ class GitProvider(Protocol):
 
 
 class DivineGitGateway:
-    """Full-depth Git workspace constrained to one god and one repository."""
+    """Deep Git workspace constrained to one god's authorized knowledge and law surface."""
 
     def __init__(self, actor_id: str, provider: GitProvider) -> None:
         self.policy = DivineAccessPolicy(actor_id)
         self.provider = provider
 
     def read_file(self, path: str, *, ref: str = "main") -> str:
-        safe_path = self.policy.assert_repo_path(path)
+        safe_path = self.policy.assert_divine_read_path(path)
         return self.provider.read_file(AUTHORIZED_REPOSITORY, safe_path, ref)
 
     def search_code(self, query: str) -> list[dict]:
         if not query.strip():
             raise ValueError("search query is required")
-        return self.provider.search_code(AUTHORIZED_REPOSITORY, query)
+        results = self.provider.search_code(AUTHORIZED_REPOSITORY, query)
+        visible: list[dict] = []
+        for result in results:
+            path = result.get("path")
+            if not isinstance(path, str):
+                continue
+            if self.policy.can_divine_read_path(path):
+                visible.append(result)
+        return visible
 
     def create_branch(self, slug: str, *, base_ref: str = "main") -> str:
         slug = slug.strip().strip("/")
@@ -114,7 +126,7 @@ class DivineGitGateway:
         message: str,
     ) -> str:
         self.policy.assert_git_write_branch(branch)
-        safe_path = self.policy.assert_repo_path(path)
+        safe_path = self.policy.assert_divine_write_path(path)
         if not message.strip():
             raise ValueError("commit message is required")
         return self.provider.write_file(
@@ -157,6 +169,9 @@ class CreatorGitGateway:
 
     def pull_request(self, pr_number: int) -> PullRequestSnapshot:
         return self.provider.get_pull_request(AUTHORIZED_REPOSITORY, pr_number)
+
+    def pull_request_files(self, pr_number: int) -> tuple[str, ...]:
+        return self.provider.list_pull_request_files(AUTHORIZED_REPOSITORY, pr_number)
 
     def passed_checks(self, commit_sha: str) -> frozenset[str]:
         return self.provider.get_passed_checks(AUTHORIZED_REPOSITORY, commit_sha)
