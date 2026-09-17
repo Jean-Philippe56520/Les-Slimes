@@ -1,23 +1,17 @@
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Callable
+from typing import Any, Callable
 
-from ..database.sqlite_repo import SQLiteRepository
+from ..database.base import RelationalRepository
 from ..governance.invariants import TERMINAL_INTERVENTION_STATUSES, ensure_governance_invariants
 from ..governance.models import AuthorizationDecision, DivineIntervention
 from ..governance.policy import GovernancePolicy
 from ..governance.storage import GovernanceStorage
 from .canonical import AdvanceResult, CanonicalRuntime
 from .commands import apply_command
-from .storage import (
-    RuntimeCommand,
-    RuntimeStorage,
-    WriterLease,
-    WriterLeaseLost,
-)
+from .storage import RuntimeCommand, RuntimeStorage, WriterLease, WriterLeaseLost
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,7 +34,7 @@ class CanonicalWorldWorker:
 
     def __init__(
         self,
-        repository: SQLiteRepository,
+        repository: RelationalRepository,
         *,
         holder_id: str,
         batch_size: int = 1000,
@@ -94,8 +88,8 @@ class CanonicalWorldWorker:
     def release_lease(self, lease: WriterLease) -> None:
         self.storage.release_lease(lease)
 
-    def _guard(self, lease_box: list[WriterLease]) -> Callable[[sqlite3.Connection], None]:
-        def guard(conn: sqlite3.Connection) -> None:
+    def _guard(self, lease_box: list[WriterLease]) -> Callable[[Any], None]:
+        def guard(conn: Any) -> None:
             self.storage.assert_lease_in_transaction(
                 conn,
                 lease_box[0],
@@ -138,20 +132,20 @@ class CanonicalWorldWorker:
         intervention: DivineIntervention,
         reason: str,
     ) -> None:
-        """Persist command + intervention rejection in one SQLite transaction."""
+        """Persist command + intervention rejection in one database transaction."""
         now = self._now()
         with self.repository._connect() as conn:
-            conn.execute("BEGIN IMMEDIATE")
+            self.repository.begin_write(conn)
             row = conn.execute(
                 "SELECT actor_id, status, rejected_reason FROM divine_interventions WHERE id = ?",
                 (intervention.id,),
             ).fetchone()
             if row is None:
                 raise KeyError(intervention.id)
-            status = str(row["status"])
-            if status == "executed":
+            intervention_status = str(row["status"])
+            if intervention_status == "executed":
                 raise RuntimeError("Executed intervention cannot be rejected")
-            if status not in {"rejected", "cancelled"}:
+            if intervention_status not in {"rejected", "cancelled"}:
                 conn.execute(
                     """
                     UPDATE divine_interventions
@@ -168,7 +162,11 @@ class CanonicalWorldWorker:
                     payload={"intervention_id": intervention.id, "reason": reason},
                     created_at_utc=now,
                 )
-            terminal_reason = str(row["rejected_reason"] or reason) if status == "rejected" else reason
+            terminal_reason = (
+                str(row["rejected_reason"] or reason)
+                if intervention_status == "rejected"
+                else reason
+            )
             conn.execute(
                 """
                 UPDATE runtime_commands
@@ -183,8 +181,8 @@ class CanonicalWorldWorker:
         self,
         command: RuntimeCommand,
         intervention: DivineIntervention,
-    ) -> Callable[[sqlite3.Connection], None]:
-        def mutate(conn: sqlite3.Connection) -> None:
+    ) -> Callable[[Any], None]:
+        def mutate(conn: Any) -> None:
             now = self._now()
             current = conn.execute(
                 "SELECT status FROM divine_interventions WHERE id = ?",
@@ -192,10 +190,9 @@ class CanonicalWorldWorker:
             ).fetchone()
             if current is None:
                 raise PermissionError("Divine intervention disappeared before commit")
-            if str(current["status"]) in TERMINAL_INTERVENTION_STATUSES and str(current["status"]) != "executed":
-                raise PermissionError(
-                    f"Divine intervention is terminal: {current['status']}"
-                )
+            current_status = str(current["status"])
+            if current_status in TERMINAL_INTERVENTION_STATUSES and current_status != "executed":
+                raise PermissionError(f"Divine intervention is terminal: {current_status}")
             self.policy.assert_authorized_in_transaction(
                 conn,
                 command,
