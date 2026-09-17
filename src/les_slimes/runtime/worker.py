@@ -6,8 +6,11 @@ from datetime import UTC, datetime
 from typing import Callable
 
 from ..database.sqlite_repo import SQLiteRepository
+from ..governance.models import AuthorizationDecision, DivineIntervention
+from ..governance.policy import GovernancePolicy
+from ..governance.storage import GovernanceStorage
 from .canonical import AdvanceResult, CanonicalRuntime
-from .commands import apply_command, permission_for_command
+from .commands import apply_command
 from .storage import (
     RuntimeCommand,
     RuntimeStorage,
@@ -57,6 +60,8 @@ class CanonicalWorldWorker:
         self.command_page_size = command_page_size
         self.runtime = CanonicalRuntime(repository, batch_size=batch_size)
         self.storage = RuntimeStorage(repository)
+        self.governance = GovernanceStorage(repository)
+        self.policy = GovernancePolicy(self.storage, self.governance)
 
     @staticmethod
     def _utc(value: datetime) -> datetime:
@@ -103,6 +108,63 @@ class CanonicalWorldWorker:
 
         return heartbeat
 
+    def _get_or_create_intervention(
+        self,
+        command: RuntimeCommand,
+        decision: AuthorizationDecision,
+    ) -> DivineIntervention:
+        existing = self.governance.get_intervention_for_command(command.id)
+        if existing is not None:
+            return existing
+        return self.governance.create_intervention(
+            actor_id=command.actor_id,
+            action_kind=command.command_type,
+            power_level=decision.required_power_level,
+            permission=decision.permission,
+            command_id=command.id,
+            source_proposal_id=command.source_proposal_id,
+            status="authorized" if decision.allowed else "proposed",
+            budget_kind=decision.budget_kind,
+            budget_cost=decision.budget_cost,
+            reason=decision.reason,
+            now_utc=self._now(),
+        )
+
+    def _reject_command(
+        self,
+        command: RuntimeCommand,
+        intervention: DivineIntervention,
+        reason: str,
+    ) -> None:
+        if intervention.status != "rejected":
+            self.governance.reject_intervention(
+                intervention.id,
+                reason=reason,
+                now_utc=self._now(),
+            )
+        self.storage.mark_rejected(command.id, reason)
+
+    def _governance_commit_mutator(
+        self,
+        command: RuntimeCommand,
+        intervention: DivineIntervention,
+    ) -> Callable[[sqlite3.Connection], None]:
+        def mutate(conn: sqlite3.Connection) -> None:
+            now = self._now()
+            self.policy.assert_authorized_in_transaction(
+                conn,
+                command,
+                now_utc=now,
+            )
+            self.governance.execute_intervention_in_transaction(
+                conn,
+                intervention=intervention,
+                now_utc=now,
+                father_unlimited=command.actor_id == "father",
+            )
+
+        return mutate
+
     def run_until_with_lease(
         self,
         target_time: datetime,
@@ -138,8 +200,14 @@ class CanonicalWorldWorker:
                     transaction_guard=self._guard(lease_box),
                 )
                 world = self.repository.load_world()
+                decision = self.policy.authorize(command, now_utc=self._now())
+                intervention = self._get_or_create_intervention(command, decision)
+                if not decision.allowed:
+                    self._reject_command(command, intervention, decision.reason)
+                    rejected += 1
+                    continue
+
                 try:
-                    self._authorize(command)
                     result = apply_command(
                         world,
                         command_type=command.command_type,
@@ -148,7 +216,7 @@ class CanonicalWorldWorker:
                         source_proposal_id=command.source_proposal_id,
                     )
                 except (KeyError, TypeError, ValueError, PermissionError) as exc:
-                    self.storage.mark_rejected(command.id, str(exc))
+                    self._reject_command(command, intervention, str(exc))
                     rejected += 1
                     continue
 
@@ -157,6 +225,7 @@ class CanonicalWorldWorker:
                     payload={
                         "command_id": command.id,
                         "command_sequence": command.sequence,
+                        "intervention_id": intervention.id,
                         "actor_id": command.actor_id,
                         "command_type": command.command_type,
                         "source_proposal_id": command.source_proposal_id,
@@ -164,14 +233,23 @@ class CanonicalWorldWorker:
                     },
                 )
                 lease_box[0] = self.heartbeat_lease(lease_box[0])
-                self.repository.save_world(
-                    world,
-                    transaction_guard=self._guard(lease_box),
-                )
+                try:
+                    self.repository.save_world(
+                        world,
+                        transaction_guard=self._guard(lease_box),
+                        transaction_mutator=self._governance_commit_mutator(
+                            command, intervention
+                        ),
+                    )
+                except PermissionError as exc:
+                    self._reject_command(command, intervention, str(exc))
+                    rejected += 1
+                    continue
+
                 self.storage.mark_applied(
                     command.id,
                     applied_at_utc=self._now(),
-                    result=result,
+                    result={**result, "intervention_id": intervention.id},
                 )
                 applied += 1
 
@@ -198,16 +276,6 @@ class CanonicalWorldWorker:
             return result
         finally:
             self.release_lease(latest)
-
-    def _authorize(self, command: RuntimeCommand) -> None:
-        actor = self.storage.get_actor(command.actor_id)
-        if not actor.active:
-            raise PermissionError(f"Actor {actor.id!r} is inactive")
-        permission = permission_for_command(command.command_type)
-        if not actor.can(permission):
-            raise PermissionError(
-                f"Actor {actor.id!r} lacks permission {permission.value!r}"
-            )
 
 
 __all__ = [
