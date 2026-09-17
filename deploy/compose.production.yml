@@ -1,0 +1,66 @@
+x-les-slimes-image: &les-slimes-image
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  image: les-slimes:${LES_SLIMES_IMAGE_TAG:-local}
+
+services:
+  api:
+    <<: *les-slimes-image
+    command:
+      - uvicorn
+      - les_slimes.production:create_api_app
+      - --factory
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    restart: unless-stopped
+    environment:
+      LES_SLIMES_DATABASE_URL: ${LES_SLIMES_DATABASE_URL:?set LES_SLIMES_DATABASE_URL}
+      LES_SLIMES_AUTH_TOKEN_HASHES_JSON: ${LES_SLIMES_AUTH_TOKEN_HASHES_JSON:?set LES_SLIMES_AUTH_TOKEN_HASHES_JSON}
+    ports:
+      - "${LES_SLIMES_API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  worker:
+    <<: *les-slimes-image
+    command:
+      - les-slimes-production
+      - worker
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      LES_SLIMES_DATABASE_URL: ${LES_SLIMES_DATABASE_URL:?set LES_SLIMES_DATABASE_URL}
+      LES_SLIMES_WORKER_ID: ${LES_SLIMES_WORKER_ID:-canonical-worker}
+      LES_SLIMES_WORKER_POLL_SECONDS: ${LES_SLIMES_WORKER_POLL_SECONDS:-1}
+      LES_SLIMES_WORKER_LEASE_TTL_SECONDS: ${LES_SLIMES_WORKER_LEASE_TTL_SECONDS:-30}
+      LES_SLIMES_WORKER_HEARTBEAT_SECONDS: ${LES_SLIMES_WORKER_HEARTBEAT_SECONDS:-10}
+      LES_SLIMES_WORKER_BATCH_SIZE: ${LES_SLIMES_WORKER_BATCH_SIZE:-1000}
+      LES_SLIMES_WORKER_COMMAND_PAGE_SIZE: ${LES_SLIMES_WORKER_COMMAND_PAGE_SIZE:-1000}
+
+  lab:
+    <<: *les-slimes-image
+    profiles: ["lab"]
+    command:
+      - streamlit
+      - run
+      - streamlit_app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+    restart: unless-stopped
+    environment:
+      LES_SLIMES_DATABASE_URL: ${LES_SLIMES_DATABASE_URL:?set LES_SLIMES_DATABASE_URL}
+    ports:
+      - "${LES_SLIMES_LAB_PORT:-8501}:8501"
