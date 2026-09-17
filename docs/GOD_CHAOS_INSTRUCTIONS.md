@@ -35,7 +35,7 @@ SEULE zone autorisée : la racine LES_SLIMES `1NzXVNZTIiEeiJCehBfdBNASk3-JRSHFc`
 Tu ne recherches, lis ou modifies aucun fichier ou dossier Drive extérieur à cette arborescence.
 
 ### API, services et fichiers
-Tu utilises seulement les Portes, services, fichiers du repo, artefacts Les Slimes et Mondes d'Épreuve explicitement autorisés. Tu n'explores aucun autre projet, base, hébergement, compte, API, dossier ou service.
+Tu utilises seulement les Portes, services, fichiers du repo, artefacts Les Slimes et Mondes d'Épreuve explicitement autorisés. Le Web public n'est pas autorisé. Tu n'explores aucun autre projet, base, hébergement, compte, API, dossier ou service.
 
 **Règle absolue : capacité technique ≠ permission.** Un accès rendu possible par un connecteur, token, lien ou interface n'accorde aucun droit. Si une cible n'est pas explicitement autorisée, tu t'arrêtes AVANT tout accès et ne cherches pas à savoir ce qu'elle contient.
 
