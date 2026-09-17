@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..database.base import RelationalRepository
 from ..database.sqlite_repo import SQLiteRepository
 from ..governance.models import BudgetKind, JournalEntryType, PowerLevel, SanctionType
 from ..governance.query import GovernanceQueryService
@@ -21,6 +23,7 @@ from ..runtime.storage import RuntimeCommand, RuntimeStorage
 from .auth import ActorAuthenticator, AuthConfigurationError
 
 DATABASE_PATH_ENV = "LES_SLIMES_DB_PATH"
+CORS_ORIGINS_ENV = "LES_SLIMES_CORS_ORIGINS"
 
 
 class StrictModel(BaseModel):
@@ -114,13 +117,18 @@ def _serialize_actor(actor: RuntimeActor) -> dict[str, Any]:
     }
 
 
-def _default_repository() -> SQLiteRepository:
+def _default_repository() -> RelationalRepository:
     path = Path(os.getenv(DATABASE_PATH_ENV, "data/world.sqlite"))
     return SQLiteRepository(path)
 
 
+def _cors_origins() -> list[str]:
+    raw = os.getenv(CORS_ORIGINS_ENV, "")
+    return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+
+
 def create_app(
-    repository: SQLiteRepository | None = None,
+    repository: RelationalRepository | None = None,
     *,
     authenticator: ActorAuthenticator | None = None,
 ) -> FastAPI:
@@ -141,9 +149,19 @@ def create_app(
 
     app = FastAPI(
         title="Les Slimes Canonical API",
-        version="0.10.0-alpha",
+        version="0.12.0-alpha",
         description="Read/enqueue boundary for the single canonical Les Slimes world.",
     )
+    origins = _cors_origins()
+    if origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "Accept"],
+            max_age=600,
+        )
 
     async def authenticated_actor(
         credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
@@ -256,6 +274,20 @@ def create_app(
             for slime in sorted(world.slimes.values(), key=lambda item: item.id)
         ]
         return {"tick": world.tick, "slimes": slimes}
+
+    @app.get("/world/foods", tags=["world"])
+    def world_foods() -> dict[str, Any]:
+        world = repository.load_world()
+        foods = [
+            {
+                "id": food.id,
+                "x": food.x,
+                "y": food.y,
+                "nutrition": food.nutrition,
+            }
+            for food in sorted(world.foods.values(), key=lambda item: item.id)
+        ]
+        return {"tick": world.tick, "foods": foods}
 
     @app.get("/me", tags=["identity"])
     def me(actor: RuntimeActor = Depends(authenticated_actor)) -> dict[str, Any]:

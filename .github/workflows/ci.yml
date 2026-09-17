@@ -109,10 +109,30 @@ jobs:
       - name: Run PostgreSQL integration suite
         run: python -m pytest tests/test_postgres_backend.py tests/test_postgres_experiment_fork.py -vv
 
+  frontend:
+    name: React PixiJS build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck and build frontend
+        working-directory: frontend
+        run: npm run build
+
   docker:
     name: Docker build
     runs-on: ubuntu-latest
-    needs: [test, postgres]
+    needs: [test, postgres, frontend]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

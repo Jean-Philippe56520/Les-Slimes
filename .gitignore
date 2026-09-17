@@ -9,4 +9,7 @@ venv/
 data/*.db
 data/*.sqlite*
 .streamlit/secrets.toml
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 .DS_Store

@@ -1,6 +1,6 @@
 # API canonique Les Slimes
 
-L'API FastAPI est une frontière réseau du monde canonique. Elle peut lire l'état, écrire des journaux/propositions et placer des commandes dans la command queue. Elle ne modifie jamais directement `World`.
+L'API FastAPI est la frontière réseau du monde canonique. Elle lit l'état, écrit des journaux/propositions et place les commandes dans la command queue. Elle ne modifie jamais directement `World` et ne prend jamais le writer lease.
 
 ## Invariant d'identité
 
@@ -14,13 +14,21 @@ Un champ `actor_id` ajouté à un payload de commande est rejeté par le schéma
 
 `father` représente le Créateur. `herald` représente Jean-Philippe, le Héraut, sans privilège souverain par défaut.
 
-## Configuration
+## Persistance
 
-Base canonique SQLite actuelle :
+En développement, SQLite reste disponible :
 
 `LES_SLIMES_DB_PATH=/chemin/vers/world.sqlite`
 
-Authentification :
+En production, le backend canonique peut être PostgreSQL :
+
+`LES_SLIMES_DATABASE_URL=postgresql://...`
+
+Le DSN réel ne doit jamais être commité, journalisé ou stocké dans Drive. La sélection PostgreSQL est provider-neutral : le moteur n'exige aucun fournisseur particulier.
+
+## Authentification
+
+Variable serveur :
 
 `LES_SLIMES_AUTH_TOKEN_HASHES_JSON`
 
@@ -32,17 +40,33 @@ Exemple de forme uniquement :
 {"father":"<sha256>","herald":"<sha256>","order":"<sha256>","chaos":"<sha256>"}
 ```
 
-Si aucune configuration d'authentification n'est fournie, les routes protégées échouent fermées avec HTTP 503.
+Si aucune configuration d'authentification n'est fournie, les routes protégées échouent fermées avec HTTP 503. Un acteur inactif est refusé.
 
-## Lancement de développement
+## CORS et frontend
 
-Une base canonique déjà initialisée est requise.
+Les projections nécessaires au frontend sont publiques et strictement en lecture seule. Pour une origine web séparée, configurer côté API :
+
+`LES_SLIMES_CORS_ORIGINS=https://exemple.netlify.app`
+
+Plusieurs origines exactes peuvent être séparées par des virgules. CORS n'est pas un mécanisme d'authentification : les routes mutantes restent protégées par identité serveur et gouvernance.
+
+Le frontend ne doit jamais recevoir un jeton `father`, `herald`, `order` ou `chaos`, ni un DSN PostgreSQL.
+
+## Lancement
+
+Développement local sur SQLite :
 
 ```bash
 uvicorn les_slimes.api.app:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-Le déploiement public, PostgreSQL durable, TLS, rotation des jetons et supervision du processus restent des étapes distinctes de production.
+Production avec backend choisi par variables d'environnement :
+
+```bash
+uvicorn les_slimes.production:create_api_app --factory --host 0.0.0.0 --port 8000
+```
+
+Voir `docs/PRODUCTION.md` pour le Worker H24, PostgreSQL, migration et supervision.
 
 ## Routes principales
 
@@ -50,7 +74,8 @@ Lecture publique :
 
 - `GET /health` : tick, retard, backlog et état du writer lease ;
 - `GET /world` : métriques et digest du monde ;
-- `GET /world/slimes` : projection des Slimes pour l'interface.
+- `GET /world/slimes` : projection des Slimes pour l'interface ;
+- `GET /world/foods` : projection des ressources alimentaires.
 
 Acteur authentifié :
 
