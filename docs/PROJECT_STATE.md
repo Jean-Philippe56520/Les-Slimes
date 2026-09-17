@@ -20,7 +20,7 @@ Toute mutation externe officielle suit désormais :
 
 `acteur -> command queue persistante -> CanonicalWorldWorker -> GovernancePolicy -> moteur Python -> persistance atomique monde + intervention + budget + audit`
 
-La gouvernance est vérifiée à l'exécution puis revalidée juste avant le commit. Une commande peut donc être mise en queue puis rejetée si l'autorité a changé ; ce refus reste auditable.
+La gouvernance est vérifiée à l'exécution puis revalidée juste avant le commit. Une commande peut donc être mise en queue puis rejetée si l'autorité a changé ; ce refus reste auditable et terminal une fois persisté.
 
 Les expériences sont explicitement non canoniques et structurellement isolées de la persistance officielle.
 
@@ -63,24 +63,36 @@ Les expériences sont explicitement non canoniques et structurellement isolées 
 - budgets append-only : `miracle`, `legislative`, `favor`, `transgression_debt` ;
 - le Père n'est pas limité par les budgets d'exécution mais toutes ses interventions restent auditées ;
 - sanctions déclaratives allowlistées : suspension, refus Miracle/Décret, gel de budget, plafond de pouvoir ;
-- `GovernancePolicy` centralise identité, permission, niveau, sanction et budget ;
+- `GovernancePolicy` centralise identité, permission, niveau, sanction et budget et échoue fermé si un état de gouvernance manque ;
 - une commande issue de l'Observateur exige aussi `observer.apply_proposal` ;
 - chaque commande mutante crée une intervention divine attribuée ;
 - revalidation de la gouvernance juste avant commit ;
 - débit budget + état d'intervention + audit écrits dans la même transaction SQLite que `save_world` ;
+- rejet d'une commande + rejet de son intervention écrits dans une seule transaction SQLite ;
+- états `executed`, `rejected` et `cancelled` terminaux, protégés par triggers SQLite ;
+- un rejet persistant ne peut pas ressusciter après crash, expiration d'une sanction ou changement d'autorité ;
+- un seul débit négatif autorisé par intervention via index SQLite unique partiel ;
 - crash après commit mais avant `mark_applied` réconcilié sans double débit ;
 - audit append-only chaîné par hash et validation de chaîne ;
 - journaux et propositions divines persistants ;
 - proposition possible même avec budget d'exécution nul ;
 - stockage minimal du Conseil divin et positions réelles d'Ordre/Chaos ;
-- `GovernanceAdminService` : seul le Père peut modifier permissions, pouvoir, budgets, sanctions ou suspension ;
+- `GovernanceAdminService` : seul le Père peut enregistrer un acteur et modifier permissions, pouvoir, budgets, sanctions ou suspension ;
+- tout acteur enregistré par le Père reçoit atomiquement un état de gouvernance Observation ;
+- les acteurs runtime historiques sans état sont backfillés en Observation avant exécution ;
+- toute mutation administrative exige une raison non vide ;
 - aucune commande canonique ne permet à un dieu de s'auto-attribuer budget/pouvoir/permission ;
 - la Transgression n'est pas un bypass exécutable : elle reste une classification gouvernée/auditable ;
+- package `governance` à imports bas niveau sans cycle avec `runtime.commands` ;
+- tests d'import exécutés dans des interpréteurs Python vierges et dans les deux ordres d'import ;
+- test architectural interdisant aux surfaces externes de contourner `GovernanceAdminService` ;
 - CLI Père : `governance-status`, `governance-budget`, `governance-power`, `governance-permission`, `governance-active`, `governance-sanction`, `governance-sanction-lift` ;
 - CLI journal/proposition : `governance-journal`, `governance-proposal` ;
 - le Lab Streamlit affiche la gouvernance en lecture seule ; administration complète réservée au CLI jusqu'à l'API authentifiée ;
 - la gouvernance ne modifie pas `World.state_digest()` ;
 - les forks expérimentaux ne recopient aucune table `divine_*`.
+
+Les anciennes méthodes mutantes de `RuntimeStorage` restent uniquement comme primitives techniques de compatibilité/migration. Elles ne constituent pas un chemin d'administration autorisé ; les interfaces externes sont testées pour ne jamais les appeler.
 
 ## Science/forks présents
 
@@ -150,4 +162,4 @@ Si moteur/persistance concernés, lire aussi `src/les_slimes/world/engine.py`, `
 
 ## Prochaine action recommandée
 
-Construire l'API Python/FastAPI au-dessus du runtime et de la gouvernance existants, avec authentification explicite du Père et des acteurs. Ensuite construire React + TypeScript + PixiJS.
+Après fusion complète et CI verte de #8, construire l'API Python/FastAPI au-dessus du runtime et de la gouvernance existants, avec authentification explicite du Père et des acteurs. Ensuite construire React + TypeScript + PixiJS.
