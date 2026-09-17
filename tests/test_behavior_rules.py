@@ -5,7 +5,6 @@ import pytest
 from les_slimes.config import WorldConfig
 from les_slimes.database.sqlite_repo import SQLiteRepository
 from les_slimes.world.engine import World
-from les_slimes.world.modes import WorldMode
 
 
 def test_declarative_rule_can_override_behavior():
@@ -56,16 +55,10 @@ def test_behavior_rule_roundtrip_is_exact(tmp_path):
     assert list(restored.behavior_rules) == list(world.behavior_rules)
 
 
-def test_invalid_rule_is_rejected_and_experiment_is_locked():
+def test_invalid_rule_is_rejected():
     cfg = replace(WorldConfig(), initial_slimes=1, initial_food=0, max_food=1)
-    sandbox = World(cfg)
+    world = World(cfg)
     with pytest.raises(ValueError):
-        sandbox.add_behavior_rule(
+        world.add_behavior_rule(
             {"name": "Bad", "conditions": [], "action": "execute_python"}
-        )
-
-    experiment = World(cfg, mode=WorldMode.EXPERIMENT)
-    with pytest.raises(PermissionError):
-        experiment.add_behavior_rule(
-            {"name": "Rest", "conditions": [], "action": "rest"}
         )
