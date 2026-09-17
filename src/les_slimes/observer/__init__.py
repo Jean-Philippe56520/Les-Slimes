@@ -1,3 +1,3 @@
-from .proposals import ObserverProposal, apply_proposal, validate_proposal
+from .proposals import ObserverProposal, proposal_to_command, validate_proposal
 
-__all__ = ["ObserverProposal", "apply_proposal", "validate_proposal"]
+__all__ = ["ObserverProposal", "proposal_to_command", "validate_proposal"]

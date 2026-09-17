@@ -2,7 +2,7 @@ from dataclasses import replace
 
 from les_slimes.config import WorldConfig
 from les_slimes.database.sqlite_repo import SQLiteRepository
-from les_slimes.observer import ObserverProposal, apply_proposal
+from les_slimes.observer import ObserverProposal, proposal_to_command
 from les_slimes.world.engine import World
 
 
@@ -54,14 +54,15 @@ def test_mystery_persists_exactly(tmp_path):
     assert restored.state_digest() == world.state_digest()
 
 
-def test_observer_can_propose_safe_mystery():
+def test_observer_safe_mystery_becomes_canonical_command_description():
     world = World(replace(WorldConfig(), initial_slimes=1, initial_food=0, max_food=1))
+    before = world.state_digest()
     proposal = ObserverProposal.from_dict(
         {
             "type": "mystery_proposal",
             "summary": "Introduce a hidden signal source.",
             "confidence": 0.6,
-            "evidence": ["Sandbox narrative intervention"],
+            "evidence": ["Non-canonical narrative hypothesis"],
             "parameters": {
                 "mystery": {
                     "public_label": "Fragment X",
@@ -74,6 +75,8 @@ def test_observer_can_propose_safe_mystery():
             },
         }
     )
-    result = apply_proposal(world, proposal)
-    assert result["applied"] is True
-    assert result["mystery_id"] in world.mysteries
+    command_type, payload = proposal_to_command(proposal)
+    assert command_type == "add_mystery"
+    assert payload["mystery"]["public_label"] == "Fragment X"
+    assert world.state_digest() == before
+    assert world.mysteries == {}

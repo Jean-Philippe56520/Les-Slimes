@@ -104,40 +104,20 @@ def _require_number(data: dict[str, Any], key: str) -> None:
         raise ValueError(f"{key} must be numeric")
 
 
-def apply_proposal(world: World, proposal: ObserverProposal) -> dict[str, Any]:
+def proposal_to_command(proposal: ObserverProposal) -> tuple[str, dict[str, Any]] | None:
+    """Convert a mutating Observer proposal into a canonical command description.
+
+    Analytical proposals intentionally return None and never mutate the world.
+    """
     if proposal.type == "behavior_candidate":
-        rule = world.add_behavior_rule(
-            dict(proposal.parameters["rule"]), source="observer"
-        )
-        return {"applied": True, "kind": "behavior_rule", "rule_id": rule.id}
+        return "add_behavior_rule", {"rule": dict(proposal.parameters["rule"])}
 
     if proposal.type == "mystery_proposal":
-        mystery = world.add_mystery(
-            dict(proposal.parameters["mystery"]), source="observer"
-        )
-        return {"applied": True, "kind": "mystery", "mystery_id": mystery.id}
+        return "add_mystery", {"mystery": dict(proposal.parameters["mystery"])}
 
     if proposal.type == "world_event_proposal":
-        params = proposal.parameters
-        action = params["action"]
-        if action == "deposit_food":
-            ids = world.player_deposit_food(
-                float(params["x"]),
-                float(params["y"]),
-                int(params.get("count", 1)),
-            )
-            return {"applied": True, "kind": action, "food_ids": ids}
-        if action == "emit_signal":
-            receivers = world.player_emit_signal(
-                str(params["signal"]),
-                float(params["x"]),
-                float(params["y"]),
-                float(params["radius"]) if "radius" in params else None,
-            )
-            return {"applied": True, "kind": action, "receivers": receivers}
+        params = dict(proposal.parameters)
+        action = str(params.pop("action"))
+        return action, params
 
-    return {
-        "applied": False,
-        "kind": proposal.type,
-        "reason": "Analytical proposals do not mutate the world",
-    }
+    return None

@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 
 from ..database.sqlite_repo import SQLiteRepository
-from .actors import permission_for_command
 from .canonical import AdvanceResult, CanonicalRuntime
+from .commands import apply_command, permission_for_command
 from .storage import RuntimeCommand, RuntimeStorage
 
 
@@ -74,7 +73,13 @@ class CanonicalWorldWorker:
                 world = self.repository.load_world()
                 try:
                     self._authorize(command)
-                    result = self._apply_to_world(world, command)
+                    result = apply_command(
+                        world,
+                        command_type=command.command_type,
+                        payload=command.payload,
+                        actor_id=command.actor_id,
+                        source_proposal_id=command.source_proposal_id,
+                    )
                 except (KeyError, TypeError, ValueError, PermissionError) as exc:
                     self.storage.mark_rejected(command.id, str(exc))
                     rejected += 1
@@ -87,6 +92,7 @@ class CanonicalWorldWorker:
                         "command_sequence": command.sequence,
                         "actor_id": command.actor_id,
                         "command_type": command.command_type,
+                        "source_proposal_id": command.source_proposal_id,
                         "result": result,
                     },
                 )
@@ -121,25 +127,3 @@ class CanonicalWorldWorker:
             raise PermissionError(
                 f"Actor {actor.id!r} lacks permission {permission.value!r}"
             )
-
-    @staticmethod
-    def _apply_to_world(world, command: RuntimeCommand) -> dict[str, Any]:
-        payload = command.payload
-        if command.command_type == "deposit_food":
-            x = float(payload["x"])
-            y = float(payload["y"])
-            count = int(payload.get("count", 1))
-            food_ids = world.player_deposit_food(x, y, count)
-            return {"food_ids": food_ids, "count": len(food_ids)}
-
-        if command.command_type == "emit_signal":
-            signal = str(payload["signal"])
-            x = float(payload["x"])
-            y = float(payload["y"])
-            radius = payload.get("radius")
-            if radius is not None:
-                radius = float(radius)
-            receivers = world.player_emit_signal(signal, x, y, radius=radius)
-            return {"signal": signal, "receivers": receivers}
-
-        raise ValueError(f"Unsupported canonical command type: {command.command_type}")
