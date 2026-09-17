@@ -115,7 +115,7 @@ Voir `docs/API.md`.
 
 ## Persistance PostgreSQL présente
 
-La couche de persistance est maintenant abstraite par `RelationalRepository`.
+La couche de persistance est abstraite par `RelationalRepository`.
 
 ### SQLite
 
@@ -192,7 +192,7 @@ Voir `docs/PRODUCTION.md`.
 
 ## Frontend React/PixiJS
 
-Le frontend principal est présent dans `frontend/` :
+Le frontend principal est intégré dans `frontend/` :
 
 - React + TypeScript strict + Vite ;
 - PixiJS v8 ;
@@ -204,10 +204,11 @@ Le frontend principal est présent dans `frontend/` :
 - digest scientifique ;
 - responsive ;
 - polling des projections publiques uniquement ;
+- refus d'afficher un snapshot mélangeant plusieurs ticks ;
 - aucune simulation côté navigateur ;
 - aucun secret/token dans le frontend ;
 - configuration Netlify via `netlify.toml` ;
-- build TypeScript/Vite ajouté à la CI.
+- build TypeScript/Vite ajouté à la CI et validé avec les suites Python/PostgreSQL/Docker.
 
 Voir `docs/FRONTEND.md`.
 
@@ -228,19 +229,20 @@ Streamlit reste un laboratoire secondaire science/admin/debug. Il ne doit pas de
 - #10 acteur runtime `herald` ;
 - #11 API/authentification canonique ;
 - #12 contrat de backend de persistance ;
-- #13 PostgreSQL + migration + runtime H24 de production.
+- #13 PostgreSQL + migration + runtime H24 de production ;
+- #14 frontend React/TypeScript/PixiJS + Netlify + projections/CORS.
 
-La branche frontend suivante construit la PR #14 React/PixiJS/Netlify.
-
-## Dette prioritaire après frontend
+## Dette prioritaire
 
 1. connecter un hébergeur réel pour PostgreSQL + API + Worker ;
 2. initialiser/migrer le monde canonique réel puis vérifier son fonctionnement H24 ;
-3. déployer le frontend sur Netlify et relier API/CORS ;
+3. créer le site Netlify Les Slimes, configurer `VITE_API_BASE_URL` et l'allowlist CORS ;
 4. configurer sauvegardes, restauration testée et supervision externe ;
 5. automatiser rapports/Drive ;
 6. activer Ordre/Chaos comme GPT Projects autonomes et leurs cycles planifiés ;
 7. exporter journaux/Conseil vers Drive sans rôle transactionnel.
+
+Aucun projet Netlify Les Slimes n'est actuellement identifié par le connecteur disponible ; ne jamais réutiliser arbitrairement un autre site. La création d'un nouveau projet Netlify devra être explicitement confirmée avant action.
 
 ## Lecture obligatoire
 
