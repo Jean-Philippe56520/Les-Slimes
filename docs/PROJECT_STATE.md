@@ -20,7 +20,7 @@ Toute mutation externe officielle suit désormais :
 
 `acteur -> permission -> command queue persistante -> CanonicalWorldWorker -> moteur Python -> persistance`
 
-Les expériences sont explicitement non canoniques et doivent rester isolées de la persistance officielle.
+Les expériences sont explicitement non canoniques et structurellement isolées de la persistance officielle.
 
 ## Runtime canonique présent
 
@@ -42,11 +42,26 @@ Les expériences sont explicitement non canoniques et doivent rester isolées de
 - Observateur convertit ses propositions en commandes mais ne modifie plus directement `World` ;
 - test architectural empêchant les principaux contournements de la frontière canonique.
 
+## Science/forks présents
+
+- scope de persistance explicite : `canonical` ou `non_canonical_experiment` ;
+- les anciennes DB historiques sans scope mais contenant un monde sont reconnues comme canoniques puis estampillées ;
+- le runtime canonique et `RuntimeStorage` refusent une DB expérimentale ;
+- un runner expérimental refuse une DB canonique ;
+- création d'un fork depuis un backup SQLite cohérent ouvert en lecture seule ;
+- reconstruction du fork dans une nouvelle DB au lieu de recopier la DB runtime complète ;
+- les tables `runtime_commands`, `runtime_writer_lease` et `runtime_actors` ne sont pas copiées ;
+- `ExperimentManifest` avec experiment/run id, source tick/event sequence/digest/git commit/config, condition, seed expérimental, digests initial/final et ticks exécutés ;
+- reseed RNG expérimental explicite et traçable ;
+- CLI `experiment-fork` et `experiment-run` ;
+- tests prouvant qu'une expérience ne modifie pas le digest du monde canonique et que deux forks exacts reproduisent le même résultat.
+
 PR intégrées ou en cours :
 - `#2 feat: add canonical time catch-up runtime` ;
 - `#3 feat: add canonical command queue and writer lease` ;
 - `#4 refactor: replace world modes with actor permissions` ;
-- `#5 refactor: enforce canonical command boundary`.
+- `#5 refactor: enforce canonical command boundary` ;
+- `#6 feat: isolate scientific experiment forks`.
 
 ## État technique moteur
 
@@ -54,18 +69,17 @@ Le repo contient notamment : moteur 2D déterministe, RNG dédié/restaurable, g
 
 ## Dette prioritaire
 
-1. formaliser les forks scientifiques isolés : snapshot source, `canonical=false`, interdiction technique d'écriture canonique ;
-2. durcir le worker H24 : heartbeat réel pendant longs catch-up, supervision, reprise et tests de concurrence ;
-3. brancher budgets/sanctions/journaux divins sur les permissions ;
-4. construire l'API Python ;
-5. construire React + TypeScript + PixiJS ;
-6. choisir la persistance PostgreSQL de production ;
-7. automatiser rapports/Drive ;
-8. créer Ordre/Chaos comme GPT Projects autonomes puis leurs tâches planifiées.
+1. durcir le worker H24 : heartbeat réel pendant longs catch-up, supervision, reprise et tests de concurrence ;
+2. brancher budgets/sanctions/journaux divins sur les permissions ;
+3. construire l'API Python ;
+4. construire React + TypeScript + PixiJS ;
+5. choisir la persistance PostgreSQL de production ;
+6. automatiser rapports/Drive ;
+7. créer Ordre/Chaos comme GPT Projects autonomes puis leurs tâches planifiées.
 
 ## Point de vigilance
 
-Le monde n'est pas encore prêt pour production H24. Le worker doit encore être durci avant exposition réseau. Les expériences doivent également être isolées structurellement avant d'être considérées sûres.
+Le monde n'est pas encore prêt pour production H24. Le worker doit encore être durci avant exposition réseau.
 
 Une ancienne base contenant une metadata `mode` reste lisible : le loader l'ignore et la clé est supprimée au prochain `save_world`.
 
@@ -92,4 +106,4 @@ Si moteur/persistance concernés, lire aussi `src/les_slimes/world/engine.py`, `
 
 ## Prochaine action recommandée
 
-Construire les forks scientifiques explicitement non canoniques, puis durcir le worker H24. Ne pas démarrer React/PixiJS avant ces deux verrous.
+Durcir le World Worker H24 : heartbeat réel, renouvellement du lease pendant longs catch-up, boucle/supervision, crash recovery et tests de concurrence. Ne pas démarrer React/PixiJS avant ce verrou.
