@@ -39,6 +39,7 @@ _CREATOR_ONLY_READ_PATHS = frozenset(
         "docs/PROJECT_STATE.md",
         "docs/PROJECT_INSTRUCTIONS.md",
         "docs/DIVINE_AUTONOMY.md",
+        "docs/DIVINE_GOVERNANCE.md",
         "docs/OBSERVER_CONTRACT.md",
         "docs/SCIENTIFIC_PROTOCOL.md",
         "docs/API.md",
