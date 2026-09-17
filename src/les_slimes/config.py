@@ -12,6 +12,7 @@ class WorldConfig:
     seed: int = 428719
     width: float = 120.0
     height: float = 80.0
+    tick_duration_seconds: float = 1.0
     initial_slimes: int = 100
     initial_food: int = 180
     max_food: int = 260
@@ -59,6 +60,8 @@ class WorldConfig:
     def validate(self) -> None:
         if self.width <= 0 or self.height <= 0:
             raise ValueError("World dimensions must be positive")
+        if self.tick_duration_seconds <= 0:
+            raise ValueError("tick_duration_seconds must be positive")
         if self.initial_slimes < 1:
             raise ValueError("initial_slimes must be >= 1")
         if self.initial_food < 0 or self.max_food < self.initial_food:
