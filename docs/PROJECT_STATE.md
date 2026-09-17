@@ -15,16 +15,17 @@ Ce fichier sert de point de reprise après changement ou réinitialisation de co
 Il existe **un seul monde Les Slimes canonique**, persistant et partagé.
 
 Il ne change jamais de mode.
-Les anciens modes `sandbox`, `observation`, `experiment` encore présents dans le moteur sont legacy et doivent être refactorés.
+Les anciens modes globaux `sandbox`, `observation`, `experiment` ont été retirés du moteur, du digest et de la persistance.
 
-Les restrictions portent sur les permissions/budgets des acteurs.
-Les expériences utilisent des forks non canoniques isolés incapables d'écrire dans le monde officiel.
+Les restrictions portent désormais sur les identités/permissions des acteurs et, à terme, leurs budgets/sanctions.
+Les expériences sont explicitement non canoniques et doivent rester isolées de la persistance officielle.
 
 ## Architecture cible
 
 - moteur et lois : Python dans `src/les_slimes/` ;
 - runtime : World Worker avec horloge canonique, ticks, catch-up, heartbeat, checkpoints et writer unique ;
 - commandes : queue persistante, ordonnée, idempotente ;
+- autorisation : acteurs persistants + permissions par commande ;
 - frontend principal : React + TypeScript + PixiJS ;
 - frontend hébergé sur Netlify ;
 - Streamlit : Lab science/admin/debug uniquement ;
@@ -34,7 +35,7 @@ Les expériences utilisent des forks non canoniques isolés incapables d'écrire
 
 ## Runtime canonique désormais implémenté
 
-Le socle temps/persistance a été ajouté sur `main` :
+Le socle temps/persistance/autorisation est présent sur `main` :
 
 - `tick_duration_seconds` dans la configuration ;
 - métadonnées UTC canoniques persistées ;
@@ -48,11 +49,19 @@ Le socle temps/persistance a été ajouté sur `main` :
 - lease de writer exclusif ;
 - `CanonicalWorldWorker` comme chemin cible unique de mutation ;
 - événement `command_applied` persisté avec le monde pour permettre une reprise après crash sans double effet ;
-- premières commandes allowlistées : dépôt de nourriture et émission de signal.
+- premières commandes allowlistées : dépôt de nourriture et émission de signal ;
+- table persistante `runtime_actors` ;
+- modèle `RuntimeActor` + `ActorPermission` ;
+- acteurs initiaux : `father`, `order`, `chaos`, `observer`, `system` ;
+- autorisation contrôlée dans le worker avant mutation ;
+- acteurs inconnus/inactifs rejetés ;
+- permissions des dieux/Observateur conservatrices par défaut ;
+- le Père possède les permissions runtime actuellement définies.
 
 PR intégrées :
 - `#2 feat: add canonical time catch-up runtime` ;
-- `#3 feat: add canonical command queue and writer lease`.
+- `#3 feat: add canonical command queue and writer lease` ;
+- `#4 refactor: replace world modes with actor permissions`.
 
 ## État technique déjà présent
 
@@ -77,16 +86,18 @@ Le repo contient :
 - horloge canonique + catch-up ;
 - writer lease ;
 - command queue ;
+- acteurs persistants + permissions ;
+- expériences marquées explicitement non canoniques ;
 - CI.
 
 ## Dette/écart vers la cible
 
 À construire/refactorer maintenant :
-1. permissions/identités acteurs à la place des modes globaux ;
+1. faire passer toutes les mutations externes par la command queue ;
 2. retirer les mutations directes de Streamlit et le réduire à un Lab client ;
-3. forks d'expériences isolés ;
-4. renforcer le worker H24 : heartbeat réel, supervision et stratégie de reprise ;
-5. identité/budgets/sanctions/journaux des dieux ;
+3. formaliser davantage les forks d'expériences isolés (copie de snapshot, interdiction d'écriture canonique) ;
+4. renforcer le worker H24 : heartbeat réel pendant longs catch-up, supervision et stratégie de reprise ;
+5. brancher budgets/sanctions/journaux des dieux sur les permissions ;
 6. API ;
 7. React/TypeScript/PixiJS ;
 8. stratégie de persistance distante PostgreSQL ;
@@ -96,12 +107,14 @@ Le repo contient :
 
 ## Point de vigilance runtime
 
-Le writer lease et la command queue constituent le socle, mais le monde n'est pas encore considéré prêt pour la production H24. Avant exposition réseau il faut notamment :
-- supprimer la dépendance aux modes legacy ;
-- appliquer des permissions d'acteur aux commandes ;
-- empêcher les interfaces de muter directement le moteur ;
+Le monde n'est pas encore considéré prêt pour la production H24. Avant exposition réseau il faut notamment :
+- empêcher CLI/Streamlit et toute autre interface de muter directement le moteur ;
+- faire de la command queue la frontière obligatoire des mutations externes ;
 - durcir le heartbeat du worker pendant les longs catch-up ;
-- tester davantage les crash windows et la concurrence.
+- tester davantage les crash windows et la concurrence ;
+- relier les permissions aux budgets/sanctions avant autonomie divine.
+
+Une ancienne base contenant une metadata `mode` reste lisible : le loader l'ignore et cette clé est supprimée au prochain `save_world`.
 
 ## Gouvernance divine décidée
 
@@ -165,13 +178,13 @@ Puis selon le travail :
 
 ## Prochaine action recommandée
 
-Le socle temps + queue + writer est désormais présent.
+Le socle temps + queue + writer + permissions est désormais présent.
 
 Prochaine séquence :
-1. remplacer les modes globaux par des identités/permissions d'acteurs ;
-2. faire passer toutes les mutations externes par la command queue ;
-3. transformer Streamlit en Lab lecture/admin sans simulation concurrente ;
-4. isoler formellement les forks d'expériences ;
+1. faire passer les mutations CLI/Streamlit par la command queue ;
+2. transformer Streamlit en Lab lecture/admin sans simulation concurrente ;
+3. formaliser les forks scientifiques non canoniques ;
+4. durcir le worker H24 ;
 5. construire ensuite l'API puis le frontend React/PixiJS.
 
 Dernière décision fonctionnelle importante : **un seul monde canonique partagé, aucun mode global du monde**.
