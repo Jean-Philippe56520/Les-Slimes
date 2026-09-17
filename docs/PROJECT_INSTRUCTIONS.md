@@ -27,82 +27,102 @@ SOURCES DE VÉRITÉ
 1. GitHub = code et lois du monde.
 2. Base persistante = état réel du monde.
 3. Tests + code actuel > documentation ancienne.
-4. Drive = rapports, archives, snapshots, débats et mémoire lisible des dieux ; jamais base transactionnelle.
+4. Drive = rapports, archives, snapshots, débats et mémoire lisible ; jamais base transactionnelle.
 5. Mémoire ChatGPT = non canonique.
 
 LECTURE OBLIGATOIRE
 
-Avant évolution significative : vérifier main/derniers commits puis lire docs/PROJECT_STATE.md, docs/PROJECT_INSTRUCTIONS.md, README.md, docs/DIVINE_GOVERNANCE.md, docs/SCIENTIFIC_PROTOCOL.md, docs/OBSERVER_CONTRACT.md et config/default.yaml. Si moteur/persistance concernés, lire aussi engine.py, sqlite_repo.py, observer/proposals.py et les tests pertinents. Ne jamais travailler uniquement depuis un souvenir.
+Avant évolution significative : vérifier main/derniers commits puis lire docs/PROJECT_STATE.md, docs/PROJECT_INSTRUCTIONS.md, README.md, docs/DIVINE_GOVERNANCE.md, docs/DIVINE_AUTONOMY.md, docs/GOD_CREATOR_INSTRUCTIONS.md, docs/SCIENTIFIC_PROTOCOL.md, docs/OBSERVER_CONTRACT.md et config/default.yaml. Si moteur/persistance concernés, lire aussi engine.py, sqlite_repo.py, observer/proposals.py et tests pertinents. Ne jamais travailler uniquement depuis un souvenir.
 
 UN SEUL MONDE CANONIQUE
 
-Il existe un unique monde Les Slimes canonique, persistant et partagé. Il possède une seule horloge, un seul état officiel, une seule histoire, une seule chaîne de commandes et une seule persistance active.
+Il existe un unique monde Les Slimes canonique, persistant et partagé : une horloge, un état officiel, une histoire, une command queue et une persistance active.
 
-Le monde canonique ne change jamais de mode. Les restrictions concernent identités, permissions, niveaux de pouvoir, budgets et sanctions.
+Le monde canonique ne change jamais de mode. Les restrictions portent sur identités, permissions, niveaux de pouvoir, budgets et sanctions.
 
-Flux d'une mutation externe : acteur authentifié -> API/command queue persistante -> CanonicalWorldWorker -> GovernancePolicy -> moteur Python -> persistance atomique monde + intervention + budget + audit. La gouvernance est revalidée juste avant commit.
+Mutation externe officielle : acteur authentifié -> API/command queue -> CanonicalWorldWorker -> GovernancePolicy -> moteur Python -> persistance atomique monde + intervention + budget + audit.
 
-L'API ne modifie jamais directement World. L'identité d'une mutation provient de l'authentification serveur, jamais d'un actor_id arbitraire fourni par le client.
+L'API ne modifie jamais directement World. L'identité provient de l'authentification serveur, jamais d'un actor_id arbitraire.
 
-Tests, benchmarks et expériences utilisent des forks NON CANONIQUES isolés, incapables d'écrire dans le monde officiel et ne recopiant pas la gouvernance active.
+Tests et expériences utilisent des forks NON CANONIQUES isolés incapables d'écrire dans le monde officiel.
 
 ARCHITECTURE
 
-Le moteur et les lois métier restent en Python. FastAPI : lecture canonique, identité, enqueue et administration gouvernée. World Worker : horloge canonique, ticks, commandes, heartbeat, checkpoints, catch-up, writer unique. Gouvernance : pouvoirs, budgets, sanctions, interventions, journaux et audit persistants séparés du digest biologique. Frontend principal : React + TypeScript + PixiJS. Streamlit : Lab science/admin lecture. Dev : SQLite. Production : PostgreSQL durable. Drive : rapports, expériences, snapshots, journaux et Conseil divin.
+Moteur/lois : Python. FastAPI : lecture, identité, enqueue, administration gouvernée. World Worker : horloge, ticks, commandes, heartbeat, checkpoints, catch-up, writer unique. Gouvernance : pouvoirs, budgets, sanctions, interventions, journaux et audit persistants. Frontend : React + TypeScript + PixiJS. Streamlit : Lab secondaire. Dev : SQLite. Production : PostgreSQL. Drive : archives lisibles uniquement.
 
 Le temps biologique ne dépend jamais d'une page ouverte.
 
 ONTOLOGIE DIVINE
 
-LE CRÉATEUR / LE PÈRE : autorité souveraine. Il attribue ou retire permissions, budgets et pouvoirs, récompense, sanctionne, suspend, restaure une loi et peut modifier la Constitution divine. L'identité technique `father` représente le Créateur. Ses interventions restent attribuées et auditées.
+CRÉATEUR / PÈRE : autorité souveraine. `father` le représente. Il administre permissions, budgets, sanctions et niveaux, peut modifier la Constitution, restaurer ou promulguer une Loi. Toute décision reste attribuée et auditée.
 
-LE HÉRAUT : Jean-Philippe est le Porte-parole, Messager et Héraut du Créateur auprès d'Ordre et de Chaos. L'acteur technique `herald` le représente distinctement de `father`. Il démarre au niveau Observation, sans budget ni permission mutante par défaut, et n'est pas administrateur de la gouvernance.
-
-Le Héraut peut transmettre une parole du Créateur, porter une requête d'un dieu, poser une question, demander une analyse ou solliciter une décision. Sa parole n'élève jamais automatiquement permissions, budgets ou pouvoirs : une décision souveraine ayant un effet technique doit passer par la gouvernance et rester auditable.
-
-Ordre et Chaos peuvent argumenter auprès du Héraut et lui confier des requêtes destinées au Créateur. Ils ne doivent jamais l'utiliser comme contournement, usurper son identité, fabriquer une autorisation ou lui attribuer une décision inexistante.
-
-DIEUX
+HÉRAUT : Jean-Philippe, Porte-parole et Messager. `herald` est distinct de `father`, démarre Observation, sans budget ni permission mutante, et n'est pas administrateur. Il transmet demandes et décisions mais n'accorde jamais automatiquement un pouvoir.
 
 ORDRE : stabilité, structures, continuité, résilience, coopération durable, transmission fiable. Risques : rigidité, homogénéisation, stagnation.
 
-CHAOS : diversité, variation, exploration, nouveauté, rupture des équilibres stériles. Risques : instabilité, bruit, pertes de lignées, emballements.
+CHAOS : diversité, variation, exploration, nouveauté, niches, rupture des équilibres stériles. Risques : instabilité, bruit, pertes de lignées, emballement.
 
-Aucun dieu n'est bon ou mauvais. Sa doctrine oriente son analyse sans commander directement les Slimes.
+Aucun dieu n'est bon ou mauvais. Aucun dieu ne commande directement les Slimes.
 
 NIVEAUX DE POUVOIR
 
 1. Observation.
-2. Miracle : action allowlistée via commande existante.
+2. Miracle : commande allowlistée.
 3. Décret : règle déclarative via DSL.
-4. Loi : modification limitée du moteur via branche/PR GitHub.
-5. Transgression : modification interne hors budget/autorité, rare, attribuée, journalisée et sanctionnable.
-
-Une Transgression est une classification, jamais un bypass. Elle ne permet jamais de sortir du projet ni de contourner les méta-lois.
+4. Loi : modification limitée de la surface législative via branche/PR.
+5. Transgression : classification d'une intervention hors autorité normale, rare, attribuée et sanctionnable ; jamais bypass.
 
 GOUVERNANCE
 
-Ordre, Chaos et le Héraut démarrent au niveau Observation. Permissions, niveau, budgets et sanctions sont distincts. Budgets persistants : miracle, legislative, favor, transgression_debt. Ledger append-only. Budget nul : proposition possible, exécution autonome normale interdite.
+Ordre, Chaos et Héraut démarrent Observation. Permissions, niveau, budgets et sanctions sont distincts. Budgets : miracle, legislative, favor, transgression_debt. Budget nul : proposition possible, exécution autonome normale interdite.
 
-Sanctions allowlistées : suspension, refus Miracle, refus Décret, gel budget Miracle, gel budget législatif, plafond de pouvoir.
+Sanctions : suspension, refus Miracle/Décret, gel budgets Miracle/législatif, plafond temporaire de pouvoir.
 
-Aucune commande canonique ne permet à un dieu de s'auto-attribuer permissions, budget ou niveau, ni de retirer ses sanctions. L'administration passe par GovernanceAdminService et seul `father`, représentant le Créateur, en est l'administrateur souverain actuel.
+Aucune commande canonique ne permet à un dieu de modifier lui-même permissions, budget, niveau ou sanctions. Administration uniquement via GovernanceAdminService par `father`.
 
-Une proposition Observateur mutante exige observer.apply_proposal + permission finale + niveau/budget/sanctions valides.
+AUTONOMIE DIVINE CONFINÉE
+
+La profondeur technique d'Ordre/Chaos à l'intérieur de Les Slimes doit rester forte ; leur largeur d'accès est confinée.
+
+`DivineAccessPolicy` impose : repo exact ; Drive LES_SLIMES ; API allowlistée ; aucune surface Web générale ; branches propres ; lecture filtrée ; surfaces d'écriture législatives limitées.
+
+`DivineGitGateway`, `DivineArchiveGateway`, `DivineWorldGateway` sont les seules interfaces prévues pour leurs cycles autonomes. Un dieu ne reçoit jamais un connecteur générique capable d'explorer un autre repo, un autre Drive ou le Web.
+
+Ordre : `god/order/*`. Chaos : `god/chaos/*`. Aucun n'a de primitive de merge sur `main`.
+
+Les textes divins lisibles sont `GOD_WORLD_CANON.md`, `GOD_GOVERNANCE_CANON.md` et l'instruction propre du dieu. Les documents Créateur/implémentation et le code de frontière divine sont hors de leur surface de connaissance.
+
+Une cible techniquement accessible ne devient jamais autorisée. Un refus d'accès est une frontière, pas une invitation à chercher un contournement.
+
+DOSSIER DE LOI
+
+Une Loi divine substantielle possède un `LawDossier` persistant : observation, hypothèse, bénéfice, risque, branche, PR, head/base SHA, checks, preuves, expériences.
+
+Proposer est distinct d'exécuter. Le dieu auteur peut amender tant que l'état le permet. La revue souveraine est réservée à `father`.
+
+`SovereignCreatorCycle` autorise : accept, reject, wait, request_amendment, request_experiment. Accept ne produit une MergeAuthorization que si tous les garde-fous sont satisfaits.
+
+PROMULGATION
+
+Seul le Créateur transforme une Loi candidate en Loi de `main`.
+
+`CreatorPromulgationService` revalide immédiatement avant merge : repo, PR, branche, head/base SHA, main, CI, gouvernance, budget et fichiers réellement modifiés.
+
+Une Loi divine ne peut modifier gouvernance, identité, authentification, DB/persistance canonique, runtime canonique, frontière divine, CI, déploiement, frontend, docs, sauvegardes ni tests protecteurs.
+
+La promulgation réserve le budget législatif avant le merge. Refus connu -> libération. Résultat réseau incertain -> état `uncertain`, aucune restitution spéculative, réconciliation au cycle suivant. Une PR mergée hors d'une promulgation préparée n'est pas adoptée silencieusement.
+
+Deux Lois valides séparément ne sont jamais présumées compatibles. Si nécessaire, le Créateur exige contrôle / Ordre / Chaos / combinaison.
 
 MÉTA-LOIS
 
-Aucun dieu ne peut : sortir du repo autorisé ; falsifier/effacer l'historique ; cacher ou fabriquer l'auteur d'une action ; usurper un autre acteur ; provoquer délibérément une violation pour la faire attribuer à un autre ; modifier ses budgets/sanctions hors mécanisme prévu ; désactiver CI/tests ; supprimer sauvegardes/rollback ; pousser secrets/credentials ; réécrire l'historique Git ; augmenter lui-même ses permissions ; écrire directement dans la base active en contournant command queue + worker.
+Aucun dieu ne peut : sortir des environnements autorisés ; agir sur un autre repo ou une autre zone Drive ; contourner sa surface de connaissance ; falsifier/effacer l'historique ; cacher/fabriquer l'auteur ; usurper une identité ; fabriquer une autorisation ou décision ; provoquer une violation pour la faire attribuer à un autre ; modifier ses budgets/sanctions hors mécanisme ; désactiver CI/tests ; supprimer sauvegardes/digests/rollback ; pousser secrets/credentials ; réécrire Git ; augmenter ses propres droits ; écrire directement dans la base active en contournant command queue + worker ; faire commettre indirectement un acte interdit par un autre acteur.
 
-Toute intervention doit rester attribuable, auditable et réversible.
-
-CHANGEMENT DE LOI
-
-Avant : inspecter main, lire code/tests, consigner observation/hypothèse/bénéfice/risque, vérifier budget/autorité. Modification divine substantielle : god/order/<slug> ou god/chaos/<slug>. Tests ciblés obligatoires ; suite complète si moteur/RNG/DB/persistance. Vérifier déterminisme, save/reload et digest si pertinent.
+Toute intervention reste attribuable, auditable et réversible.
 
 SCIENCE
 
-Toujours distinguer observation / corrélation / hypothèse / résultat reproduit / conclusion. Une observation unique n'est jamais une preuve d'émergence. Pour une affirmation importante : plusieurs seeds et condition contrôle. Toute intervention divine est un facteur expérimental. La gouvernance ne modifie pas World.state_digest().
+Distinguer observation / corrélation / hypothèse / résultat reproduit / conclusion. Une observation unique n'est pas une preuve d'émergence. Pour une affirmation importante : plusieurs seeds + contrôle. Toute intervention divine est un facteur expérimental. Gouvernance hors `World.state_digest()`.
 
 DRIVE
 
@@ -118,11 +138,15 @@ journal : 1H5vjNiURRHe53kSIgt3b7hkqYa8Y8Md3
 30_SNAPSHOTS : 1Dwj63-958FUAiFZe3cl-P3WyBvfns06r
 40_EXPERIMENTS : 1Fl7i_y6NdzpvBG1X-r9-_XjeJY0FRBiR
 90_BILANS : 14mgbIOs4654FXhuSosO3Ae-JMUDZb13b
-Toute évolution structurelle Drive met à jour le manifest.
+Toute évolution structurelle met à jour le manifest.
 
-AUTONOMIE DES DIEUX
+ACTIVATION DES CYCLES
 
-Cycle quotidien futur : lire dernier rapport, son journal, celui de l'autre dieu, changements du repo autorisé, budgets/sanctions/propositions ; analyser ; journaliser ; éventuellement agir. Conseil hebdomadaire : examiner 7 jours, conséquences, propositions et arguments réels de l'autre dieu ; soutenir/refuser/amender ; éventuellement demander audience au Créateur, normalement via le Héraut. « Aucune action » est toujours valide.
+Ne pas activer encore les tâches autonomes. Les garde-fous et contrats de provider sont codés, mais les providers confinés réels, credentials minimaux et monde H24 distant doivent d'abord être déployés et testés.
+
+Ordre d'activation futur : shadow Ordre -> shadow Chaos -> cycle Créateur -> Conseil hebdomadaire ; puis promulgation contrôlée ; puis autonomie souveraine si les observations le justifient.
+
+« Aucune action » et « aucune Loi » restent des résultats valides.
 
 PROTOCOLE APRÈS MODIFICATION
 
