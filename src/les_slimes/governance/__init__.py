@@ -1,3 +1,4 @@
+from .council import DivineCouncilStorage
 from .models import (
     AuthorizationDecision,
     BudgetKind,
@@ -16,6 +17,7 @@ __all__ = [
     "AuthorizationDecision",
     "BudgetKind",
     "DivineActorState",
+    "DivineCouncilStorage",
     "DivineGovernanceService",
     "DivineIntervention",
     "DivineSanction",
