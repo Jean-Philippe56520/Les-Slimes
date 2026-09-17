@@ -300,7 +300,13 @@ class CreatorPromulgationService:
             )
             conn.commit()
 
-    def _finalize(self, proposal_id: int, merge_commit_sha: str) -> PromulgationResult:
+    def _finalize(
+        self,
+        proposal_id: int,
+        merge_commit_sha: str,
+        *,
+        reconciled: bool = False,
+    ) -> PromulgationResult:
         now = self._now()
         with self.repository._connect() as conn:
             self.repository.begin_write(conn)
@@ -354,7 +360,7 @@ class CreatorPromulgationService:
                 created_at_utc=now,
             )
             conn.commit()
-        return PromulgationResult(proposal_id, merge_commit_sha, False)
+        return PromulgationResult(proposal_id, merge_commit_sha, reconciled)
 
     def promulgate(self, proposal_id: int) -> PromulgationResult:
         stored = self.legislation.get(proposal_id)
@@ -377,7 +383,11 @@ class CreatorPromulgationService:
                 raise PromulgationBlocked("Merged pull request head does not match authorization")
             if not snapshot.merge_commit_sha:
                 raise RuntimeError("Merged pull request is missing merge commit SHA")
-            return self._finalize(proposal_id, snapshot.merge_commit_sha)
+            return self._finalize(
+                proposal_id,
+                snapshot.merge_commit_sha,
+                reconciled=True,
+            )
 
         blockers = self._preflight_blockers(
             stored,
@@ -418,4 +428,8 @@ class CreatorPromulgationService:
             )
             raise PromulgationBlocked(result.message or "Git provider refused the merge")
 
-        return self._finalize(proposal_id, result.merge_commit_sha)
+        return self._finalize(
+            proposal_id,
+            result.merge_commit_sha,
+            reconciled=False,
+        )
