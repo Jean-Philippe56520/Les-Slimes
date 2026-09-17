@@ -25,13 +25,37 @@ class GovernancePolicy:
     def authorize(self, command: RuntimeCommand, *, now_utc: datetime) -> AuthorizationDecision:
         now = self._utc(now_utc)
         definition = get_command_definition(command.command_type)
-        actor = self.runtime.get_actor(command.actor_id)
-        state = self.governance.get_actor_state(command.actor_id)
+        try:
+            actor = self.runtime.get_actor(command.actor_id)
+        except KeyError:
+            return self._decision(
+                False,
+                command,
+                PowerLevel.OBSERVATION,
+                0,
+                (),
+                "Actor does not exist",
+            )
+
+        try:
+            state = self.governance.get_actor_state(command.actor_id)
+        except KeyError:
+            return self._decision(
+                False,
+                command,
+                PowerLevel.OBSERVATION,
+                0,
+                (),
+                "Governance actor state is missing",
+            )
+
         sanctions = self.governance.active_sanctions(command.actor_id, now_utc=now)
         active_types = tuple(s.sanction_type for s in sanctions)
         effective_power = self._effective_power(state.max_power_level, sanctions)
-        budget_available = None if command.actor_id == "father" else self.governance.budget_balance(
-            command.actor_id, definition.budget_kind
+        budget_available = (
+            None
+            if command.actor_id == "father"
+            else self.governance.budget_balance(command.actor_id, definition.budget_kind)
         )
 
         if not actor.active:
