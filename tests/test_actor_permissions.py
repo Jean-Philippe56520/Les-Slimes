@@ -33,15 +33,38 @@ def test_default_actor_permissions_are_conservative(tmp_path):
     storage = RuntimeStorage(build_repo(tmp_path))
 
     father = storage.get_actor("father")
+    herald = storage.get_actor("herald")
     order = storage.get_actor("order")
     chaos = storage.get_actor("chaos")
     observer = storage.get_actor("observer")
 
+    assert father.kind == "father"
     assert father.can(ActorPermission.DEPOSIT_FOOD)
     assert father.can(ActorPermission.EMIT_SIGNAL)
+    assert herald.kind == "herald"
+    assert herald.display_name == "Jean-Philippe, le Heraut"
+    assert herald.permissions == frozenset()
+    assert not herald.can(ActorPermission.DEPOSIT_FOOD)
     assert not order.can(ActorPermission.DEPOSIT_FOOD)
     assert not chaos.can(ActorPermission.DEPOSIT_FOOD)
     assert not observer.can(ActorPermission.DEPOSIT_FOOD)
+
+
+def test_herald_is_observation_only_and_not_governance_admin(tmp_path):
+    repo = build_repo(tmp_path)
+    admin = GovernanceAdminService(repo)
+
+    assert admin.storage.get_actor_state("herald").max_power_level == PowerLevel.OBSERVATION
+    for kind in BudgetKind:
+        assert admin.storage.budget_balance("herald", kind) == 0
+
+    with pytest.raises(PermissionError):
+        admin.set_permissions(
+            "order",
+            [ActorPermission.DEPOSIT_FOOD],
+            reason="herald must not administer governance",
+            performed_by="herald",
+        )
 
 
 def test_unauthorized_actor_command_is_rejected_without_mutation(tmp_path):
@@ -65,6 +88,28 @@ def test_unauthorized_actor_command_is_rejected_without_mutation(tmp_path):
     assert result.commands_rejected == 1
     assert repo.load_world().next_food_id == initial_next_food_id
     assert storage.pending_commands() == []
+
+
+def test_herald_command_is_rejected_without_delegation(tmp_path):
+    repo = build_repo(tmp_path)
+    start = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+    CanonicalRuntime(repo).ensure_initialized(start)
+    storage = RuntimeStorage(repo)
+    before = repo.load_world().state_digest()
+
+    storage.enqueue_command(
+        actor_id="herald",
+        command_type="deposit_food",
+        payload={"x": 4.0, "y": 5.0, "count": 1},
+        idempotency_key="herald-no-delegation",
+        created_at_utc=start,
+    )
+
+    result = CanonicalWorldWorker(repo, holder_id="worker-herald", clock=lambda: start).run_until(start)
+
+    assert result.commands_applied == 0
+    assert result.commands_rejected == 1
+    assert repo.load_world().state_digest() == before
 
 
 def test_permission_alone_does_not_enable_actor_command(tmp_path):
