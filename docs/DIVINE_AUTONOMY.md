@@ -62,6 +62,18 @@ Cet atelier :
 - n'élargit pas la surface de connaissance du dieu ;
 - ne devient jamais une seconde source de vérité.
 
+## Pipeline de proposition
+
+`DivineLawProposalPipeline` transforme une proposition préparée par un dieu en artefacts Drive vérifiables puis en dossier transactionnel.
+
+L'acteur n'est jamais fourni par le modèle : il est résolu depuis `openai/session` + `openai/subject`. Le pipeline lit lui-même le SHA courant de `main`, valide le périmètre des fichiers proposés, calcule les SHA-256 du patch et des autres artefacts, écrit proposition/patch/tests/résultats/manifest dans l'atelier Drive propre à l'acteur, puis revalide la session immédiatement avant l'écriture en base.
+
+Le manifest Drive lie : acteur, SHA source, fichiers visés, IDs d'artefacts, digests, preuves et références d'expériences. Le digest du manifest est persisté dans le dossier canonique.
+
+La provenance technique de la conversation est conservée séparément dans `divine_proposal_provenance` sous forme de hashes session/subject. Elle n'est jamais injectée dans le payload lisible de la proposition.
+
+Si l'écriture Drive réussit mais que l'écriture transactionnelle échoue, les artefacts orphelins n'ont aucune autorité : seule une proposition persistée qui les référence est canonique.
+
 ## Proposition de Loi
 
 Le dossier persistant `LawDossier` contient notamment :
