@@ -69,7 +69,7 @@ NIVEAUX DE POUVOIR
 1. Observation.
 2. Miracle : commande allowlistée.
 3. Décret : règle déclarative via DSL.
-4. Loi : modification limitée de la surface législative via branche/PR.
+4. Loi : proposition de modification limitée de la surface législative ; Git reste en lecture seule pour le dieu et l'implémentation éventuelle appartient au Créateur.
 5. Transgression : classification d'une intervention hors autorité normale, rare, attribuée et sanctionnable ; jamais bypass.
 
 GOUVERNANCE
@@ -82,37 +82,39 @@ Aucune commande canonique ne permet à un dieu de modifier lui-même permissions
 
 AUTONOMIE DIVINE CONFINÉE
 
-La profondeur technique d'Ordre/Chaos à l'intérieur de Les Slimes doit rester forte ; leur largeur d'accès est confinée.
+La profondeur technique d'Ordre/Chaos à l'intérieur de Les Slimes reste forte ; leur largeur d'accès est confinée.
 
-`DivineAccessPolicy` impose : repo exact ; Drive LES_SLIMES ; API allowlistée ; aucune surface Web générale ; branches propres ; lecture filtrée ; surfaces d'écriture législatives limitées.
+GitHub est strictement en lecture seule pour Ordre et Chaos. `DivineGitGateway` expose uniquement lecture, recherche et SHA de `main`. Aucun dieu ne crée branche, commit, push ou PR.
 
-`DivineGitGateway`, `DivineArchiveGateway`, `DivineWorldGateway` sont les seules interfaces prévues pour leurs cycles autonomes. Un dieu ne reçoit jamais un connecteur générique capable d'explorer un autre repo, un autre Drive ou le Web.
+Ils peuvent travailler dans un atelier/fork non canonique sans credential Git d'écriture, modifier une copie du code, exécuter tests/expériences et produire patchs/diffs.
 
-Ordre : `god/order/*`. Chaos : `god/chaos/*`. Aucun n'a de primitive de merge sur `main`.
+Drive LES_SLIMES porte leurs artefacts :
+- 50_DIVINE_WORKSHOPS : 1qNxcE9R0DewgB8iQPwFXaS2WXcz_fU1k
+- ORDER_PROPOSALS : 1VbYXIt8hU4UEAVYIvWMob7SL0G3-lcOC
+- CHAOS_PROPOSALS : 1i5L-8aOCvrwc3Buck3hhJnFydvlFXc2v
+- CREATOR_REVIEW : 1i0vMELFu0Ijw7ZhP4430GgZ3lq3TXArt
 
-Les textes divins lisibles sont `GOD_WORLD_CANON.md`, `GOD_GOVERNANCE_CANON.md` et l'instruction propre du dieu. Les documents Créateur/implémentation et le code de frontière divine sont hors de leur surface de connaissance.
+Ordre écrit uniquement dans ORDER_PROPOSALS ; Chaos uniquement dans CHAOS_PROPOSALS. Drive n'est jamais transactionnel. La base persistante conserve le statut officiel des propositions.
 
-Une cible techniquement accessible ne devient jamais autorisée. Un refus d'accès est une frontière, pas une invitation à chercher un contournement.
+Les textes divins lisibles restent GOD_WORLD_CANON.md, GOD_GOVERNANCE_CANON.md et l'instruction propre. Documents Créateur/implémentation et code de frontière restent hors de leur surface.
 
 DOSSIER DE LOI
 
-Une Loi divine substantielle possède un `LawDossier` persistant : observation, hypothèse, bénéfice, risque, branche, PR, head/base SHA, checks, preuves, expériences.
+`LawDossier` persiste : observation, hypothèse, bénéfice, risque, source_main_sha, drive_artifact_id, manifest_digest, patch_digest, affected_files, preuves et expériences.
 
-Proposer est distinct d'exécuter. Le dieu auteur peut amender tant que l'état le permet. La revue souveraine est réservée à `father`.
+`SovereignCreatorCycle` autorise accept, reject, wait, request_amendment, request_experiment. Accept produit une `ImplementationAuthorization`, jamais une autorisation de merge.
 
-`SovereignCreatorCycle` autorise : accept, reject, wait, request_amendment, request_experiment. Accept ne produit une MergeAuthorization que si tous les garde-fous sont satisfaits.
+Si une proposition est acceptée, seul le Créateur peut l'implémenter : branche `father/law-<proposal_id>-<slug>`, fichiers, tests, PR, puis `CreatorImplementation` attachée au dossier. Le périmètre de fichiers doit correspondre exactement au dossier accepté.
 
 PROMULGATION
 
-Seul le Créateur transforme une Loi candidate en Loi de `main`.
+Seul le Créateur peut écrire et merger dans GitHub. `CreatorPromulgationService` revalide immédiatement avant merge : repo, branche father/law-*, PR, head/base SHA, main, CI, gouvernance, budget et fichiers réellement modifiés.
 
-`CreatorPromulgationService` revalide immédiatement avant merge : repo, PR, branche, head/base SHA, main, CI, gouvernance, budget et fichiers réellement modifiés.
+Une Loi ordinaire issue d'Ordre/Chaos ne peut viser gouvernance, identité, authentification, DB/persistance canonique, runtime canonique, frontière divine, CI, déploiement, frontend, docs, sauvegardes ni tests protecteurs.
 
-Une Loi divine ne peut modifier gouvernance, identité, authentification, DB/persistance canonique, runtime canonique, frontière divine, CI, déploiement, frontend, docs, sauvegardes ni tests protecteurs.
+La promulgation réserve le budget législatif du dieu proposant. Refus connu -> libération. Résultat réseau incertain -> état uncertain sans restitution spéculative, puis réconciliation.
 
-La promulgation réserve le budget législatif avant le merge. Refus connu -> libération. Résultat réseau incertain -> état `uncertain`, aucune restitution spéculative, réconciliation au cycle suivant. Une PR mergée hors d'une promulgation préparée n'est pas adoptée silencieusement.
-
-Deux Lois valides séparément ne sont jamais présumées compatibles. Si nécessaire, le Créateur exige contrôle / Ordre / Chaos / combinaison.
+Deux propositions valides séparément ne sont jamais présumées compatibles. Le Créateur peut exiger contrôle / Ordre / Chaos / combinaison.
 
 MÉTA-LOIS
 
@@ -137,6 +139,10 @@ rejected : 1hr0EO-b0L5nj0ZsLw6qy-S-_3yybS80e
 journal : 1H5vjNiURRHe53kSIgt3b7hkqYa8Y8Md3
 30_SNAPSHOTS : 1Dwj63-958FUAiFZe3cl-P3WyBvfns06r
 40_EXPERIMENTS : 1Fl7i_y6NdzpvBG1X-r9-_XjeJY0FRBiR
+50_DIVINE_WORKSHOPS : 1qNxcE9R0DewgB8iQPwFXaS2WXcz_fU1k
+ORDER_PROPOSALS : 1VbYXIt8hU4UEAVYIvWMob7SL0G3-lcOC
+CHAOS_PROPOSALS : 1i5L-8aOCvrwc3Buck3hhJnFydvlFXc2v
+CREATOR_REVIEW : 1i0vMELFu0Ijw7ZhP4430GgZ3lq3TXArt
 90_BILANS : 14mgbIOs4654FXhuSosO3Ae-JMUDZb13b
 Toute évolution structurelle met à jour le manifest.
 
