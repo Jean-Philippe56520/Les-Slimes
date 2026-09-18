@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Protocol, runtime_checkable
 
 from .access import AUTHORIZED_REPOSITORY, DivineAccessPolicy
@@ -83,11 +84,12 @@ class GitProvider(Protocol):
 
 
 class DivineGitGateway:
-    """Deep Git workspace constrained to one god's authorized knowledge and law surface."""
+    """Read-only view of the single authorized Git repository for Order or Chaos."""
 
     def __init__(self, actor_id: str, provider: GitProvider) -> None:
         self.policy = DivineAccessPolicy(actor_id)
         self.provider = provider
+        self.policy.assert_git_read_only()
 
     def read_file(self, path: str, *, ref: str = "main") -> str:
         safe_path = self.policy.assert_divine_read_path(path)
@@ -106,14 +108,50 @@ class DivineGitGateway:
                 visible.append(result)
         return visible
 
-    def create_branch(self, slug: str, *, base_ref: str = "main") -> str:
+    def main_sha(self) -> str:
+        return self.provider.get_ref_sha(AUTHORIZED_REPOSITORY, "main")
+
+
+class CreatorGitGateway:
+    """Sovereign Git writer for implementation and promulgation."""
+
+    def __init__(self, provider: GitProvider) -> None:
+        self.provider = provider
+
+    @staticmethod
+    def _safe_path(path: str) -> str:
+        if not path or "\" in path:
+            raise PermissionError("Invalid repository path")
+        candidate = PurePosixPath(path)
+        if candidate.is_absolute() or any(part in {"", ".", ".."} for part in candidate.parts):
+            raise PermissionError("Repository path escapes the authorized workspace")
+        return candidate.as_posix()
+
+    @staticmethod
+    def _assert_creator_branch(branch: str) -> str:
+        if not branch.startswith("father/law-") or branch == "father/law-":
+            raise PermissionError("Creator Law implementation branches must use father/law-*")
+        if any(char.isspace() for char in branch):
+            raise PermissionError("Creator Law branch cannot contain whitespace")
+        return branch
+
+    def main_sha(self) -> str:
+        return self.provider.get_ref_sha(AUTHORIZED_REPOSITORY, "main")
+
+    def read_file(self, path: str, *, ref: str = "main") -> str:
+        return self.provider.read_file(AUTHORIZED_REPOSITORY, self._safe_path(path), ref)
+
+    def create_implementation_branch(
+        self, proposal_id: int, slug: str, *, base_ref: str = "main"
+    ) -> str:
+        if proposal_id < 1:
+            raise ValueError("proposal_id must be positive")
         slug = slug.strip().strip("/")
-        if not slug or "/" in slug or slug in {".", ".."}:
+        if not slug or "/" in slug or any(char.isspace() for char in slug):
             raise ValueError("branch slug must be one non-empty path segment")
-        branch = f"{self.policy.branch_prefix}{slug}"
-        self.policy.assert_git_write_branch(branch)
         if base_ref != "main":
-            raise PermissionError("Divine law branches must start from main")
+            raise PermissionError("Creator Law branches must start from main")
+        branch = self._assert_creator_branch(f"father/law-{proposal_id}-{slug}")
         self.provider.create_branch(AUTHORIZED_REPOSITORY, branch, "main")
         return branch
 
@@ -125,49 +163,33 @@ class DivineGitGateway:
         content: str,
         message: str,
     ) -> str:
-        self.policy.assert_git_write_branch(branch)
-        safe_path = self.policy.assert_divine_write_path(path)
+        safe_branch = self._assert_creator_branch(branch)
+        safe_path = self._safe_path(path)
         if not message.strip():
             raise ValueError("commit message is required")
         return self.provider.write_file(
             AUTHORIZED_REPOSITORY,
             path=safe_path,
-            branch=branch,
+            branch=safe_branch,
             content=content,
             message=message.strip(),
         )
 
     def open_law_pr(self, *, title: str, body: str, branch: str) -> int:
-        self.policy.assert_git_write_branch(branch)
+        safe_branch = self._assert_creator_branch(branch)
         if not title.strip():
             raise ValueError("pull request title is required")
         return self.provider.create_pull_request(
             AUTHORIZED_REPOSITORY,
             title=title.strip(),
             body=body,
-            head=branch,
+            head=safe_branch,
             base="main",
         )
 
     def pull_request(self, pr_number: int) -> PullRequestSnapshot:
         if pr_number < 1:
             raise ValueError("pr_number must be positive")
-        return self.provider.get_pull_request(AUTHORIZED_REPOSITORY, pr_number)
-
-    def passed_checks(self, commit_sha: str) -> frozenset[str]:
-        return self.provider.get_passed_checks(AUTHORIZED_REPOSITORY, commit_sha)
-
-
-class CreatorGitGateway:
-    """Sovereign Git operations. Merge requires an immutable authorization object."""
-
-    def __init__(self, provider: GitProvider) -> None:
-        self.provider = provider
-
-    def main_sha(self) -> str:
-        return self.provider.get_ref_sha(AUTHORIZED_REPOSITORY, "main")
-
-    def pull_request(self, pr_number: int) -> PullRequestSnapshot:
         return self.provider.get_pull_request(AUTHORIZED_REPOSITORY, pr_number)
 
     def pull_request_files(self, pr_number: int) -> tuple[str, ...]:
@@ -181,6 +203,7 @@ class CreatorGitGateway:
             raise PermissionError("Merge authorization targets an unauthorized repository")
         if authorization.authorized_by != "father":
             raise PermissionError("Only a Father authorization can promulgate a Law")
+        self._assert_creator_branch(authorization.branch)
         return self.provider.merge_pull_request(
             AUTHORIZED_REPOSITORY,
             pr_number=authorization.pr_number,
