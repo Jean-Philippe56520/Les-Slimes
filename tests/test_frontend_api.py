@@ -71,3 +71,20 @@ def test_frontend_cors_is_explicitly_allowlisted(tmp_path, monkeypatch):
     assert allowed.status_code == 200
     assert allowed.headers["access-control-allow-origin"] == "https://les-slimes.example"
     assert "access-control-allow-origin" not in denied.headers
+
+
+
+def test_world_observation_projection_is_public_read_only(tmp_path, monkeypatch):
+    repo, client = build_client(tmp_path, monkeypatch)
+    before = repo.load_world().state_digest()
+
+    response = client.get("/world/observation")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state_digest"] == before
+    assert payload["world"]["population"] == 7
+    assert payload["world"]["food_count"] == 9
+    assert "genetics" in payload
+    assert "behaviour" in payload
+    assert repo.load_world().state_digest() == before
