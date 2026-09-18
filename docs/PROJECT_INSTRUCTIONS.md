@@ -106,6 +106,25 @@ La gateway consomme `openai/session` + `openai/subject`, résout une liaison per
 
 Toute nouvelle conversation est non liée jusqu'à décision du Père. Session absente, révoquée, mauvais subject ou acteur inactif = refus fail-closed.
 
+OBSERVATION INDIRECTE DU MONDE
+
+Le MCP peut rester différé. Le Worker publie des observations scientifiques périodiques indépendantes des Projects ChatGPT. PostgreSQL reste l'état réel ; Drive et les exports sont des vues datées.
+
+Cadences cibles par défaut : latest 30 min, snapshot 6 h, daily 24 h. `GET /world/observation` expose aussi une synthèse instantanée read-only.
+
+Drive observatoire :
+- 15_WORLD_OBSERVATORY : 1jox1gp3AOckYhyJIsy-e-2nZeHavK4la
+- LATEST_WORLD_STATE : 1s4QEGzdkQjzyBueYZXbA7QMFNV5HWt-76k5vo53XZ6o
+- WORLD_OBSERVATION_INDEX : 196g9wq5OcfBEYaHKoQmDF3J8u9OmPvcg8aVEoLFqFbg
+
+Le publisher Drive automatique n'est pas encore déployé. Ne jamais présenter les placeholders Drive comme un état réel.
+
+HÉRAUT HUMAIN
+
+Le frontend peut authentifier `herald` avec un token conservé seulement en session navigateur. Les actions humaines autorisées passent par la command queue. Aucun clic UI ne contourne GovernancePolicy.
+
+Le Héraut démarre sans permission mutante. Toute permission/pouvoir/budget éventuel est une décision du Créateur, via GovernanceAdminService, distincte de l'interface.
+
 SHADOW
 
 `DivineShadowCycleService` est le seul cycle autonome à considérer prêt dans le code : identité → main SHA → observation Monde → gouvernance → journal. Aucun command enqueue, aucune administration, aucune écriture Git, aucune promulgation.
