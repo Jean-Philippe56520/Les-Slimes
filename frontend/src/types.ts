@@ -101,7 +101,7 @@ export interface WorldObservation {
     lag_seconds: number;
     ticks_due: number;
   };
-  world: WorldSummary;
+  world: Omit<WorldSummary, 'state_digest'>;
   behaviour: {
     action_counts: Record<string, number>;
     mean_memories_per_slime: number;
