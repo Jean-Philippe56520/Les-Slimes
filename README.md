@@ -95,21 +95,28 @@ Google Drive : rapports/snapshots/journaux uniquement
 
 ## Autonomie divine confinée
 
-Le dépôt contient désormais le socle complet de confinement et de législation autonome :
+L'autonomie divine suit désormais une séparation stricte :
 
-- `DivineAccessPolicy` : repo unique, Drive LES_SLIMES, API allowlistée, aucune surface Web générale, branches et surfaces d'écriture limitées ;
-- frontière épistémique : les dieux lisent uniquement leur Canon commun, la Constitution divine lisible, leur instruction propre et les mécanismes du vivant accessibles ;
-- `DivineGitGateway` : recherche/lecture/écriture/PR sans primitive de merge ;
-- `DivineArchiveGateway` : recherche et capabilities confinées sous LES_SLIMES ;
-- `DivineWorldGateway` : API canonique typée sans `actor_id` contrôlé par le dieu ;
-- `LawDossier` / `DivineLegislationService` : dossier de Loi persistant, amendement, états et audit ;
-- `SovereignCreatorCycle` : revue du Père pouvant accepter, refuser, attendre ou exiger amendement/expérience ;
-- `CreatorPromulgationService` : revalidation de PR/SHA/main/CI/gouvernance/fichiers, réservation budgétaire et réconciliation des résultats Git incertains ;
-- le Créateur seul peut produire une `MergeAuthorization` et promulguer sur `main`.
+- **Ordre et Chaos : GitHub lecture seule** via `DivineGitGateway` ;
+- analyse profonde du code et tests autorisés ;
+- travail technique possible sur un atelier/fork non canonique sans credential Git d'écriture ;
+- patchs, tests, preuves et résultats déposés dans leurs ateliers Drive LES_SLIMES ;
+- statut officiel de proposition conservé dans la base persistante ;
+- **Créateur seul** : branche `father/law-*`, écriture Git, pull request et merge.
 
-Une Loi d'Ordre ou Chaos peut modifier les surfaces du vivant autorisées et leurs tests non protecteurs, mais pas gouvernance, identité, authentification, base canonique, runtime, frontière divine, CI, déploiement, frontend, documentation ou tests de sécurité.
+Ateliers Drive :
 
-**Important :** ces contrats et garde-fous sont codés et testés, mais les providers concrets et credentials minimaux ne sont pas encore déployés. Les cycles autonomes ne doivent donc pas encore être activés.
+- `ORDER_PROPOSALS` pour Ordre ;
+- `CHAOS_PROPOSALS` pour Chaos ;
+- `CREATOR_REVIEW` pour les dossiers repris par le Père.
+
+`LawDossier` lie une proposition à son SHA `main` source, son artefact Drive, ses digests et ses fichiers visés. `SovereignCreatorCycle` peut accepter/refuser/attendre/demander amendement ou expérience. Une acceptation autorise seulement l'implémentation par le Créateur.
+
+Une `CreatorImplementation` enregistre ensuite branche, PR, head/base SHA, fichiers réellement implémentés et checks. `CreatorPromulgationService` revalide ces éléments, la gouvernance et le budget avant toute fusion sur `main`, avec réservation et réconciliation en cas de résultat Git incertain.
+
+Les surfaces de gouvernance, identité, authentification, persistance canonique, runtime, frontière divine, CI, déploiement, frontend, documentation et tests protecteurs restent hors des Lois ordinaires proposées par les dieux.
+
+**Important :** les contrats sont codés mais les providers de production et credentials minimaux ne sont pas encore déployés. Les cycles autonomes restent désactivés.
 
 Voir `docs/DIVINE_AUTONOMY.md`, `docs/GOD_CREATOR_INSTRUCTIONS.md` et `docs/PROJECT_STATE.md`.
 
@@ -174,7 +181,7 @@ Aucun dieu ne commande directement les Slimes.
 # Prochaines étapes
 
 1. activer un hébergement réel PostgreSQL + API + Worker et vérifier le monde H24 ;
-2. implémenter/déployer les providers concrets des gateways avec credentials minimaux et scopes réels ;
+2. implémenter/déployer les providers concrets : GitHub read-only pour Ordre/Chaos, GitHub writer uniquement pour le Créateur, Drive limité aux ateliers LES_SLIMES et clients API liés aux acteurs ;
 3. vérifier en bout en bout l'absence de Web/connecteurs génériques chez Ordre/Chaos ;
 4. exécuter des cycles shadow Ordre -> Chaos -> Créateur ;
 5. seulement après validation, créer les tâches planifiées et passer à la promulgation contrôlée ;
