@@ -132,6 +132,14 @@ Le manifest Drive canonique contient :
 
 Drive reste non transactionnel ; le statut officiel des propositions reste en base.
 
+### Pipeline de proposition actoriel
+
+`DivineLawProposalPipeline` est présent : il résout l'acteur depuis la session liée, lit le SHA de `main` avec le provider Git read-only, calcule les digests, écrit les artefacts dans ORDER_PROPOSALS ou CHAOS_PROPOSALS selon l'acteur puis persiste le dossier de Loi.
+
+Les artefacts créés sont proposition, patch, tests, résultats et manifest JSON. Le manifest lie SHA source, fichiers visés, IDs et SHA-256 des artefacts, preuves et expériences. La session est revalidée juste avant l'écriture canonique.
+
+La provenance technique est persistée séparément dans `divine_proposal_provenance` avec hashes session/subject et n'apparaît pas dans le payload lisible du dossier.
+
 ### Dossiers de Loi
 
 `LawDossier` persiste maintenant : observation, hypothèse, bénéfice, risque, `source_main_sha`, `drive_artifact_id`, `manifest_digest`, `patch_digest`, `affected_files`, preuves et expériences.
