@@ -431,3 +431,167 @@ h2 {
     font-size: 0.72rem;
   }
 }
+
+
+.herald-console {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(11, 24, 20, 0.9);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.18);
+}
+
+.herald-console__header,
+.actor-strip {
+  display: flex;
+  align-items: center;
+}
+
+.herald-console__header {
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.herald-login {
+  display: grid;
+  grid-template-columns: minmax(220px, 420px) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.herald-login small {
+  grid-column: 1 / -1;
+}
+
+.herald-console label,
+.command-card label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.herald-console input,
+.herald-console select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 10px;
+  color: #effaf5;
+  background: #091612;
+  outline: none;
+}
+
+.herald-console input:focus,
+.herald-console select:focus {
+  border-color: rgba(112, 227, 168, 0.55);
+}
+
+.herald-console button {
+  border: 1px solid rgba(112, 227, 168, 0.28);
+  border-radius: 10px;
+  padding: 9px 13px;
+  color: #06100d;
+  background: var(--accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.herald-console button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.herald-console .secondary-button {
+  color: #cce1d8;
+  background: transparent;
+}
+
+.actor-strip {
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.actor-strip strong {
+  color: #edf8f3;
+}
+
+.actor-strip code {
+  color: #a8edca;
+}
+
+.actor-strip em {
+  color: var(--warning);
+  font-style: normal;
+}
+
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.command-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(119, 205, 168, 0.12);
+  border-radius: 14px;
+  background: rgba(5, 14, 11, 0.5);
+}
+
+.command-card > div {
+  grid-column: 1 / -1;
+}
+
+.command-card h3 {
+  margin: 4px 0 0;
+  font-size: 1rem;
+}
+
+.command-card > div span {
+  color: #6aa98f;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.command-card button,
+.command-card small {
+  align-self: end;
+}
+
+.command-card small {
+  grid-column: 1 / -1;
+  color: #718f84;
+}
+
+.console-message {
+  margin: 12px 0 0;
+  color: #a8edca;
+  font-size: 0.76rem;
+}
+
+.console-message--error {
+  color: var(--danger);
+}
+
+@media (max-width: 760px) {
+  .herald-login,
+  .command-grid,
+  .command-card {
+    grid-template-columns: 1fr;
+  }
+
+  .command-card > div,
+  .command-card small,
+  .herald-login small {
+    grid-column: auto;
+  }
+}
