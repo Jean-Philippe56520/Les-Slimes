@@ -34,6 +34,7 @@ _COPY_ORDER = (
     "divine_interventions",
     "divine_journal_entries",
     "divine_proposals",
+    "divine_session_bindings",
     "divine_audit_log",
 )
 _CLEAR_ORDER = tuple(reversed(_COPY_ORDER)) + ("runtime_writer_lease",)
