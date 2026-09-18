@@ -103,6 +103,21 @@ CREATE TABLE IF NOT EXISTS divine_proposals (
     decision_reason TEXT
 );
 
+CREATE TABLE IF NOT EXISTS divine_session_bindings (
+    session_hash TEXT PRIMARY KEY,
+    subject_hash TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at_utc TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    last_seen_at_utc TEXT NOT NULL,
+    revoked_at_utc TEXT,
+    revoked_by TEXT,
+    revoke_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_divine_session_actor
+ON divine_session_bindings(actor_id, status);
+
 CREATE TABLE IF NOT EXISTS divine_audit_log (
     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     previous_hash TEXT NOT NULL,
