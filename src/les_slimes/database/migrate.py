@@ -34,6 +34,7 @@ _COPY_ORDER = (
     "divine_interventions",
     "divine_journal_entries",
     "divine_proposals",
+    "divine_proposal_provenance",
     "divine_session_bindings",
     "divine_audit_log",
 )
