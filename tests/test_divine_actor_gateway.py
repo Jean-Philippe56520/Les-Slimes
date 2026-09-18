@@ -173,6 +173,7 @@ def test_actorial_methods_expose_no_actor_id_parameter():
         "governance_status",
         "journal_append",
         "proposal_create",
+        "law_submit",
     ):
         signature = inspect.signature(getattr(DivineActorGateway, method_name))
         assert "actor_id" not in signature.parameters
