@@ -98,6 +98,20 @@ Ordre écrit uniquement dans ORDER_PROPOSALS ; Chaos uniquement dans CHAOS_PROPO
 
 Les textes divins lisibles restent GOD_WORLD_CANON.md, GOD_GOVERNANCE_CANON.md et l'instruction propre. Documents Créateur/implémentation et code de frontière restent hors de leur surface.
 
+IDENTITÉ DES PROJECTS CHATGPT
+
+Ordre et Chaos existent actuellement comme deux Projects ChatGPT du même compte. Nom, instructions et contexte de Project ne sont jamais une authentification technique.
+
+La gateway consomme `openai/session` + `openai/subject`, résout une liaison persistante hashée créée/révoquée uniquement par father, puis choisit serveur-side acteur, atelier Drive et credential API. Aucun outil actoriel n'accepte `actor_id`.
+
+Toute nouvelle conversation est non liée jusqu'à décision du Père. Session absente, révoquée, mauvais subject ou acteur inactif = refus fail-closed.
+
+SHADOW
+
+`DivineShadowCycleService` est le seul cycle autonome à considérer prêt dans le code : identité → main SHA → observation Monde → gouvernance → journal. Aucun command enqueue, aucune administration, aucune écriture Git, aucune promulgation.
+
+`CURRENT_READINESS.autonomous_ready` doit rester faux tant que l'adaptateur MCP réel, les providers confinés, le monde H24 distant vérifié et la planification autonome ne sont pas effectivement déployés.
+
 DOSSIER DE LOI
 
 `LawDossier` persiste : observation, hypothèse, bénéfice, risque, source_main_sha, drive_artifact_id, manifest_digest, patch_digest, affected_files, preuves et expériences.
