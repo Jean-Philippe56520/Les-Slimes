@@ -91,6 +91,20 @@ Ordre et Chaos ne peuvent pas usurper une identité, fabriquer une approbation, 
 
 Le modèle d'autonomie est désormais : **GitHub lecture seule pour Ordre/Chaos ; propositions techniques dans Drive ; implémentation Git réservée au Créateur.**
 
+### Projects ChatGPT et identité de session
+
+Ordre et Chaos sont actuellement deux Projects ChatGPT distincts du même compte. Cette séparation apporte instructions, conversations et contexte propres, mais n'est pas utilisée comme frontière d'autorisation.
+
+Le code contient maintenant `DivineSessionBindingService` et `DivineActorGateway` :
+- hashes de `openai/session` et `openai/subject` persistés, jamais les identifiants bruts ;
+- bind/revoke réservés au Père et audités ;
+- session non liée/révoquée/mauvais subject/acteur inactif = refus ;
+- aucun outil actoriel ne prend `actor_id` en paramètre ;
+- le provider API est sélectionné côté serveur à partir de l'acteur résolu ;
+- le nom du Project ou ses instructions ne donnent aucune autorité technique.
+
+Ce contrat est codé et testé. L'adaptateur MCP de production et les providers confinés restent à déployer.
+
 ### Frontière Git et connaissance
 
 `DivineAccessPolicy` et `DivineGitGateway` imposent :
