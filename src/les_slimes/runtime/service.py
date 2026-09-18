@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from typing import Callable, Protocol
 
 from ..database.base import RelationalRepository
+from ..observer.world_observatory import WorldObservationPublisher
 from .canonical import CanonicalRuntime
 from .storage import WriterLease
 from .worker import CanonicalWorldWorker, WorkerRunResult
@@ -74,6 +75,7 @@ class CanonicalWorkerService:
         config: WorkerServiceConfig | None = None,
         holder_id: str | None = None,
         clock: ServiceClock | None = None,
+        observation_publisher: WorldObservationPublisher | None = None,
     ) -> None:
         self.repository = repository
         self.config = config or WorkerServiceConfig()
@@ -91,6 +93,7 @@ class CanonicalWorkerService:
         self.runtime = CanonicalRuntime(repository, batch_size=self.config.batch_size)
         self.lease: WriterLease | None = None
         self.last_result: WorkerRunResult | None = None
+        self.observation_publisher = observation_publisher
 
     @staticmethod
     def default_holder_id() -> str:
@@ -107,6 +110,8 @@ class CanonicalWorkerService:
         result, refreshed = self.worker.run_until_with_lease(self.clock.now(), lease)
         self.lease = refreshed
         self.last_result = result
+        if self.observation_publisher is not None:
+            self.observation_publisher.maybe_publish(observed_at_utc=self.clock.now())
         return result
 
     def heartbeat(self) -> WriterLease:
