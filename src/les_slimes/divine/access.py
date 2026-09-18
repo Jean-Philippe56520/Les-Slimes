@@ -133,7 +133,7 @@ class DivineAccessPolicy:
             raise PermissionError("Only the Les Slimes repository is authorized")
 
     def assert_repo_path(self, path: str) -> str:
-        if not path or "\" in path:
+        if not path or "\\" in path:
             raise PermissionError("Invalid repository path")
         candidate = PurePosixPath(path)
         if candidate.is_absolute() or any(part in {"", ".", ".."} for part in candidate.parts):
