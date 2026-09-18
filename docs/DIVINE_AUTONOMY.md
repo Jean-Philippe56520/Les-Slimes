@@ -10,6 +10,20 @@ Le confinement réduit la largeur d'accès, pas la profondeur technique. Un dieu
 
 Le Créateur, représenté par `father`, est le seul acteur de cette architecture qui transforme une proposition divine acceptée en implémentation Git puis, éventuellement, en Loi promulguée sur `main`.
 
+## Projects ChatGPT et identité technique
+
+Ordre et Chaos existent actuellement comme deux Projects ChatGPT distincts sous le même compte utilisateur. Le nom du Project, ses instructions et son contexte définissent leur identité narrative et comportementale, mais ne constituent pas une preuve technique suffisante pour autoriser une action.
+
+La frontière serveur utilise deux métadonnées de requête transmises par l'adaptateur MCP :
+- `openai/session` : identifie la conversation courante ;
+- `openai/subject` : identifie de manière pseudonyme l'utilisateur autorisé.
+
+`DivineSessionBindingService` lie, sur décision du Père uniquement, le hash de cette session et le hash du subject à un acteur Les Slimes. Les identifiants bruts ne sont pas persistés. Une session non liée, révoquée, associée à un autre subject ou à un acteur inactif échoue en mode fail-closed.
+
+`DivineActorGateway` ne reçoit jamais d'`actor_id` du modèle. Il résout l'acteur depuis la session liée, puis sélectionne les portes Git, Drive et API correspondant à cet acteur.
+
+Le nom du Project, une instruction interne ou une affirmation du modèle telle que « je suis Ordre » ou « je suis Chaos » ne modifie jamais cette liaison.
+
 ## Frontière des dieux
 
 `DivineAccessPolicy` est fail-closed :
