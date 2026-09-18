@@ -94,6 +94,7 @@ class CanonicalWorkerService:
         self.lease: WriterLease | None = None
         self.last_result: WorkerRunResult | None = None
         self.observation_publisher = observation_publisher
+        self.last_observation_error: str | None = None
 
     @staticmethod
     def default_holder_id() -> str:
@@ -111,7 +112,12 @@ class CanonicalWorkerService:
         self.lease = refreshed
         self.last_result = result
         if self.observation_publisher is not None:
-            self.observation_publisher.maybe_publish(observed_at_utc=self.clock.now())
+            try:
+                self.observation_publisher.maybe_publish(observed_at_utc=self.clock.now())
+                self.last_observation_error = None
+            except Exception as exc:
+                # Observation exports are non-canonical and must never stop the world.
+                self.last_observation_error = f"{type(exc).__name__}: {exc}"
         return result
 
     def heartbeat(self) -> WriterLease:
