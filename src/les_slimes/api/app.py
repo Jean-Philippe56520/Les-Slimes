@@ -16,6 +16,7 @@ from ..database.base import RelationalRepository
 from ..database.sqlite_repo import SQLiteRepository
 from ..divine.session_identity import DivineSessionBindingService
 from ..governance.models import BudgetKind, JournalEntryType, PowerLevel, SanctionType
+from ..observer.world_observatory import WorldObservationBuilder
 from ..governance.query import GovernanceQueryService
 from ..governance.service import DivineGovernanceService, GovernanceAdminService
 from ..runtime.actors import ActorPermission, RuntimeActor
@@ -159,6 +160,7 @@ def create_app(
     governance = DivineGovernanceService(repository)
     governance_query = GovernanceQueryService(repository)
     divine_sessions = DivineSessionBindingService(repository)
+    observation_builder = WorldObservationBuilder(repository)
     authenticator = authenticator or ActorAuthenticator.from_env(runtime_storage)
     bearer = HTTPBearer(auto_error=False)
 
@@ -303,6 +305,11 @@ def create_app(
             for food in sorted(world.foods.values(), key=lambda item: item.id)
         ]
         return {"tick": world.tick, "foods": foods}
+
+    @app.get("/world/observation", tags=["world"])
+    def world_observation() -> dict[str, Any]:
+        return observation_builder.build(observed_at_utc=datetime.now(UTC))
+
 
     @app.get("/me", tags=["identity"])
     def me(actor: RuntimeActor = Depends(authenticated_actor)) -> dict[str, Any]:
