@@ -60,6 +60,7 @@ class DivineActorGateway:
         self.git_provider = git_provider
         self.archive_provider = archive_provider
         self.api_provider_factory = api_provider_factory
+        self._archive_gateways: dict[str, DivineArchiveGateway] = {}
 
     def _resolve_actor(self, meta: Mapping[str, Any]) -> str:
         request_meta = DivineRequestMetadata.from_meta(meta)
@@ -95,7 +96,12 @@ class DivineActorGateway:
         return DivineGitGateway(self._resolve_actor(meta), self.git_provider)
 
     def _archive(self, meta: Mapping[str, Any]) -> DivineArchiveGateway:
-        return DivineArchiveGateway(self._resolve_actor(meta), self.archive_provider)
+        actor_id = self._resolve_actor(meta)
+        gateway = self._archive_gateways.get(actor_id)
+        if gateway is None:
+            gateway = DivineArchiveGateway(actor_id, self.archive_provider)
+            self._archive_gateways[actor_id] = gateway
+        return gateway
 
     def _world(self, meta: Mapping[str, Any]) -> DivineWorldGateway:
         actor_id = self._resolve_actor(meta)
