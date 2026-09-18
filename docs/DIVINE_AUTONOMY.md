@@ -1,104 +1,112 @@
 # Autonomie divine confinée
 
-Ce document définit l'architecture cible d'autonomie d'Ordre, de Chaos et du Créateur.
+Ce document définit l'architecture d'autonomie d'Ordre, de Chaos et du Créateur.
 
 ## Principe
 
-Ordre et Chaos conservent une forte capacité d'analyse, d'expérimentation et de proposition de Lois, mais leur surface technique est confinée à l'univers Les Slimes.
+Ordre et Chaos conservent une forte capacité d'analyse, d'expérimentation et de proposition, mais **GitHub leur est strictement accessible en lecture seule**.
 
-Le confinement réduit la largeur d'accès, pas la profondeur technique : un dieu doit pouvoir lire le code, rechercher, modifier sa branche, exécuter les Épreuves, inspecter les résultats et préparer une proposition de Loi sans disposer d'un accès général à des environnements extérieurs.
+Le confinement réduit la largeur d'accès, pas la profondeur technique. Un dieu peut lire et rechercher le code, comprendre les tests, travailler sur une copie non canonique, exécuter des Épreuves, produire un patch et des tests puis constituer un dossier de Loi. Il ne possède cependant aucun credential ni aucune primitive permettant de créer une branche, commit, push ou pull request GitHub.
 
-Le Créateur, représenté par `father`, reste l'autorité souveraine qui peut transformer une proposition divine en Loi effectivement intégrée à `main`.
+Le Créateur, représenté par `father`, est le seul acteur de cette architecture qui transforme une proposition divine acceptée en implémentation Git puis, éventuellement, en Loi promulguée sur `main`.
 
 ## Frontière des dieux
 
-La politique `DivineAccessPolicy` est fail-closed et s'applique à Ordre et Chaos avant tout adaptateur réel.
+`DivineAccessPolicy` est fail-closed :
 
-Elle impose notamment :
+- repo GitHub unique `Jean-Philippe56520/Les-Slimes`, lecture seule pour Ordre et Chaos ;
+- surface de connaissance filtrée ;
+- aucun Web général ;
+- Drive limité à LES_SLIMES ;
+- API limitée aux routes allowlistées ; `/admin/...` interdit ;
+- Mondes d'Épreuve non canoniques et incapables d'écrire dans le monde officiel ;
+- aucun credential Git d'écriture dans l'environnement divin.
 
-- repo GitHub unique `Jean-Philippe56520/Les-Slimes` ;
-- aucune écriture directe sur `main` ;
-- Ordre écrit seulement sous `god/order/*` ;
-- Chaos écrit seulement sous `god/chaos/*` ;
-- Drive limité à la racine LES_SLIMES et aux descendants reconnus par le manifest canonique ;
-- API limitée aux routes divines explicitement allowlistées ;
-- routes `/admin/...` interdites aux dieux ;
-- absence de surface Web générale ;
-- chemins de workspace relatifs et sans traversée hors périmètre.
+Une capacité technique sous-jacente ne constitue jamais une permission.
 
-Une capacité technique disponible en dessous d'un adaptateur ne constitue jamais une autorisation pour le dieu qui utilise cet adaptateur.
+## Ateliers Drive
 
-## Ateliers législatifs
+Le manifest canonique définit :
 
-Chaque dieu travaille dans un atelier isolé dérivé de `main` :
+- `50_DIVINE_WORKSHOPS` : `1qNxcE9R0DewgB8iQPwFXaS2WXcz_fU1k` ;
+- `ORDER_PROPOSALS` : `1VbYXIt8hU4UEAVYIvWMob7SL0G3-lcOC` ;
+- `CHAOS_PROPOSALS` : `1i5L-8aOCvrwc3Buck3hhJnFydvlFXc2v` ;
+- `CREATOR_REVIEW` : `1i0vMELFu0Ijw7ZhP4430GgZ3lq3TXArt`.
 
-- `god/order/<slug>` pour Ordre ;
-- `god/chaos/<slug>` pour Chaos.
+Ordre écrit uniquement dans `ORDER_PROPOSALS`. Chaos écrit uniquement dans `CHAOS_PROPOSALS`. Le Créateur peut lire les ateliers divins et écrit ses dossiers de reprise dans `CREATOR_REVIEW`.
 
-Une Loi candidate comporte au minimum :
+Drive reste une Archive lisible, jamais la source transactionnelle du statut d'une proposition.
 
-- auteur divin ;
-- proposition persistante ;
-- branche ;
-- PR ;
-- SHA exact de la tête ;
-- SHA de `main` ayant servi de base ;
-- résultats des Épreuves requises ;
-- état de gouvernance ;
-- preuves techniques/scientifiques ;
-- résultats expérimentaux lorsque requis.
+## Atelier technique non canonique
 
-Ordre et Chaos peuvent proposer, corriger ou retirer leurs travaux. Ils ne possèdent jamais l'autorité de merge sur `main`.
+Pour préserver leur profondeur de développement, Ordre et Chaos peuvent travailler dans une copie isolée de `main` sans credential Git d'écriture. Ils peuvent y modifier des fichiers, exécuter tests et expériences, calculer un diff ou patch et produire les artefacts nécessaires.
 
-## Cycle souverain du Créateur
+Cet atelier :
+- ne peut pas pousser vers GitHub ;
+- ne peut pas écrire dans la persistance canonique ;
+- ne dispose pas de Web général ;
+- n'élargit pas la surface de connaissance du dieu ;
+- ne devient jamais une seconde source de vérité.
 
-`SovereignCreatorCycle` sépare la décision politique du droit technique de promulguer.
+## Proposition de Loi
 
-Le Créateur peut décider :
+Le dossier persistant `LawDossier` contient notamment :
 
-- accepter ;
-- refuser ;
-- attendre ;
-- demander un amendement ;
-- demander une expérience supplémentaire.
+- auteur ;
+- observation, hypothèse, bénéfice attendu et risque ;
+- SHA exact de `main` utilisé comme source ;
+- identifiant de l'artefact Drive ;
+- digest du manifest ;
+- digest du patch ;
+- fichiers visés ;
+- preuves et expériences.
 
-Même une décision `accept` ne produit une `MergeAuthorization` que si tous les garde-fous mécaniques sont satisfaits :
+Les fichiers visés restent limités aux surfaces ordinaires du vivant et à leurs tests non protecteurs. Gouvernance, identité, authentification, persistance canonique, frontière divine, déploiement, CI, sauvegardes et tests protecteurs restent hors périmètre.
 
-- acteur divin reconnu ;
-- branche divine correcte ;
-- PR ouverte et mergeable ;
-- `main` de référence encore courant ;
-- SHA complets et liés à la revue ;
-- toutes les Épreuves requises passées ;
-- gouvernance éligible ;
-- preuves complètes ;
-- expérience isolée ou combinée passée lorsqu'elle est obligatoire.
+La base persistante conserve le statut officiel : `proposed`, `needs_evidence`, `needs_amendment`, `waiting`, `blocked`, `accepted`, `rejected`, `promulgated` ou `superseded`.
 
-L'autorisation de merge lie le numéro de PR, le SHA exact de la tête et le SHA exact de la base examinée. Une modification postérieure exige donc une nouvelle revue souveraine.
+## Revue souveraine
+
+`SovereignCreatorCycle` peut : accepter, refuser, attendre, demander un amendement ou demander une expérience.
+
+Une décision `accept` ne produit plus une autorisation de merge. Elle produit seulement une `ImplementationAuthorization` : le Créateur est autorisé à reprendre le dossier vérifié.
+
+La revue lie notamment auteur, proposition, SHA source, artefact Drive, digests et fichiers visés. Une dérive impose une nouvelle revue.
+
+## Implémentation du Créateur
+
+Si le Créateur décide d'implémenter une proposition acceptée :
+
+1. il repart du `main` examiné ;
+2. crée `father/law-<proposal_id>-<slug>` ;
+3. écrit lui-même le code et les tests ;
+4. ouvre la pull request ;
+5. exécute les Épreuves ;
+6. attache une `CreatorImplementation` au dossier persistant.
+
+Le jeu de fichiers implémentés doit correspondre exactement au périmètre accepté. Une modification supplémentaire exige une nouvelle décision ou un dossier amendé.
+
+## Promulgation
+
+`CreatorPromulgationService` revalide immédiatement avant merge :
+
+- repo, branche `father/law-*`, PR, head SHA et base SHA ;
+- ensemble réel des fichiers ;
+- surface législative autorisée ;
+- checks requis ;
+- gouvernance actuelle du dieu proposant ;
+- budget législatif.
+
+Le budget reste imputé au dieu dont la proposition est promulguée. La saga de réservation et la réconciliation d'un résultat Git incertain restent en vigueur.
 
 ## Lois concurrentes
 
-Deux Lois vertes séparément ne sont jamais supposées compatibles.
-
-Lorsque leurs effets peuvent interagir, le Créateur peut imposer une Épreuve combinée comparant notamment :
-
-- contrôle ;
-- Ordre seul ;
-- Chaos seul ;
-- Ordre + Chaos.
-
-L'intégration de plusieurs Lois reste une décision souveraine distincte de l'acceptation individuelle de chacune.
-
-## Héraut
-
-Le Héraut transmet les demandes, arguments et décisions selon la gouvernance. Il ne reçoit pas implicitement les pouvoirs techniques de `father` et n'est pas une voie indirecte permettant à un dieu de contourner sa frontière.
+Deux propositions valides séparément ne sont jamais supposées compatibles. Le Créateur peut exiger contrôle / Ordre / Chaos / combinaison avant toute implémentation ou promulgation.
 
 ## Activation progressive
 
-L'activation doit suivre trois étapes :
+1. **shadow** : propositions Drive et décisions réelles, aucune implémentation automatique ;
+2. **implémentation contrôlée** : le Créateur peut reprendre et promulguer une proposition conforme ;
+3. **autonomie souveraine** : cycles planifiés Ordre → Chaos → Créateur.
 
-1. **shadow** : cycles et décisions réels, aucune promulgation automatique ;
-2. **promulgation contrôlée** : le Créateur peut merger automatiquement les Lois satisfaisant les garde-fous ;
-3. **autonomie souveraine** : cycles planifiés complets, avec possibilité normale de ne promulguer aucune Loi.
-
-Les connecteurs génériques ne doivent être retirés aux dieux qu'une fois les adaptateurs confinés suffisamment complets pour préserver leurs capacités de travail dans Les Slimes.
+« Aucune Loi » reste toujours un résultat normal.
