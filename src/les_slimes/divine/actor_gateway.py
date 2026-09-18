@@ -1,34 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 from ..database.base import RelationalRepository
 from ..runtime.storage import RuntimeStorage
 from .archive_gateway import ArchiveProvider, DivineArchiveGateway
 from .git_gateway import DivineGitGateway, ReadOnlyGitProvider
-from .session_identity import DivineSessionBindingService
+from .session_identity import DivineRequestMetadata, DivineSessionBindingService
 from .world_gateway import CanonicalApiProvider, DivineWorldGateway
-
-
-SESSION_META_KEY = "openai/session"
-SUBJECT_META_KEY = "openai/subject"
-
-
-@dataclass(frozen=True, slots=True)
-class DivineRequestMetadata:
-    session_id: str
-    subject_id: str
-
-    @classmethod
-    def from_meta(cls, meta: Mapping[str, Any]) -> "DivineRequestMetadata":
-        session = meta.get(SESSION_META_KEY)
-        subject = meta.get(SUBJECT_META_KEY)
-        if not isinstance(session, str) or not session.strip():
-            raise PermissionError("DIVINE_SESSION_METADATA_MISSING")
-        if not isinstance(subject, str) or not subject.strip():
-            raise PermissionError("DIVINE_SUBJECT_METADATA_MISSING")
-        return cls(session_id=session.strip(), subject_id=subject.strip())
 
 
 @runtime_checkable
