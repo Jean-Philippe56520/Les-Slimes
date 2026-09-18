@@ -167,6 +167,20 @@ Les protections de PR #24 restent en vigueur : fonctionnement/réponses/limites 
 
 Les textes divins ne réintroduisent pas le cadrage extérieur interdit et les instructions d'Ordre/Chaos restent sous 7950 caractères.
 
+## Shadow runtime divin présent
+
+`DivineShadowCycleService` est présent et testé. Un cycle shadow :
+1. vérifie l'identité liée de la conversation ;
+2. lit le SHA de `main` ;
+3. observe le Monde ;
+4. lit la gouvernance ;
+5. journalise une observation attribuée ;
+6. n'expose aucune commande canonique, administration, écriture Git ou promulgation.
+
+`CURRENT_READINESS.shadow_ready == True`, mais `autonomous_ready == False` : adaptateur MCP de production, providers réels, monde H24 distant vérifié et planification autonome ne sont pas encore actifs.
+
+Les routes Père `POST /admin/divine-sessions/bind` et `POST /admin/divine-sessions/revoke` permettent de gérer les conversations opérationnelles. Les identifiants bruts ne sont jamais persistés.
+
 ## API canonique présente
 
 FastAPI fournit la frontière réseau :
