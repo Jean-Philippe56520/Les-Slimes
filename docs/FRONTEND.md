@@ -76,3 +76,18 @@ Le frontend ne doit jamais recevoir :
 - token Héraut ;
 - tokens des dieux ;
 - secrets de déploiement.
+
+
+## Console Héraut
+
+The React frontend now contains an authenticated Herald console.
+
+The browser stores the supplied actor token only in `sessionStorage`; no token is embedded in the frontend build. The console calls `GET /me` to resolve the actor and enables only actions represented by the actor's current technical permissions.
+
+Initial supported actions:
+- `deposit_food`;
+- `emit_signal`.
+
+Submission still goes through `POST /commands`. The browser never mutates the World directly. The CanonicalWorldWorker revalidates power, permissions, sanctions and budget immediately before commit.
+
+The default Herald remains Observation-only. The UI therefore exposes no mutating action until the Creator deliberately grants the required permission/power/budget through the existing governance administration path.
