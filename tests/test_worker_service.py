@@ -241,3 +241,29 @@ def test_worker_cycle_publishes_observation_after_world_advance(tmp_path):
     assert result.final_advance.current_tick == 5
     assert publisher.calls == [start + timedelta(seconds=5)]
     service.close()
+
+
+
+class FailingPublisher:
+    def maybe_publish(self, *, observed_at_utc):
+        raise RuntimeError("archive unavailable")
+
+
+def test_observation_export_failure_never_stops_canonical_world(tmp_path):
+    start = datetime(2026, 9, 18, 9, 0, tzinfo=UTC)
+    repo = build_repo(tmp_path, "export-failure.sqlite")
+    CanonicalRuntime(repo).ensure_initialized(start)
+    clock = FakeServiceClock(start + timedelta(seconds=3))
+    service = CanonicalWorkerService(
+        repo,
+        holder_id="resilient-worker",
+        clock=clock,
+        observation_publisher=FailingPublisher(),
+    )
+
+    result = service.cycle()
+
+    assert result.final_advance.current_tick == 3
+    assert repo.load_world().tick == 3
+    assert service.last_observation_error == "RuntimeError: archive unavailable"
+    service.close()
