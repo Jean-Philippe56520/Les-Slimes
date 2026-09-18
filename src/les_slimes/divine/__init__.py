@@ -16,6 +16,7 @@ from .git_gateway import (
     ReadOnlyGitProvider,
 )
 from .legislation import DivineLegislationService, LawDossier, LegislativeStatus
+from .session_identity import DivineSessionBinding, DivineSessionBindingService
 from .promulgation import (
     CreatorPromulgationService,
     PromulgationBlocked,
@@ -48,6 +49,8 @@ __all__ = [
     "DivineGitGateway",
     "DivineLegislationService",
     "DivineSurface",
+    "DivineSessionBinding",
+    "DivineSessionBindingService",
     "DivineWorldGateway",
     "GitMergeResult",
     "ImplementationAuthorization",
