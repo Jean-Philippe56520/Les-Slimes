@@ -9,10 +9,11 @@ from .archive_gateway import (
 )
 from .git_gateway import (
     CreatorGitGateway,
+    CreatorGitProvider,
     DivineGitGateway,
     GitMergeResult,
-    GitProvider,
     PullRequestSnapshot,
+    ReadOnlyGitProvider,
 )
 from .legislation import DivineLegislationService, LawDossier, LegislativeStatus
 from .promulgation import (
@@ -38,6 +39,7 @@ __all__ = [
     "CreatorArchiveGateway",
     "CreatorDecision",
     "CreatorGitGateway",
+    "CreatorGitProvider",
     "CreatorImplementation",
     "CreatorPromulgationService",
     "CreatorReview",
@@ -48,7 +50,6 @@ __all__ = [
     "DivineSurface",
     "DivineWorldGateway",
     "GitMergeResult",
-    "GitProvider",
     "ImplementationAuthorization",
     "LawCandidate",
     "LawDossier",
@@ -56,6 +57,7 @@ __all__ = [
     "MergeAuthorization",
     "PromulgationBlocked",
     "PromulgationResult",
+    "ReadOnlyGitProvider",
     "PullRequestSnapshot",
     "SovereignCreatorCycle",
 ]
