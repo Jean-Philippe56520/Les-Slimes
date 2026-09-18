@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..database.base import RelationalRepository
 from ..database.sqlite_repo import SQLiteRepository
+from ..divine.session_identity import DivineSessionBindingService
 from ..governance.models import BudgetKind, JournalEntryType, PowerLevel, SanctionType
 from ..governance.query import GovernanceQueryService
 from ..governance.service import DivineGovernanceService, GovernanceAdminService
@@ -93,6 +94,19 @@ class LiftSanctionRequest(StrictModel):
     reason: str = Field(min_length=1)
 
 
+class BindDivineSessionRequest(StrictModel):
+    session_id: str = Field(min_length=1)
+    subject_id: str = Field(min_length=1)
+    actor_id: str = Field(min_length=1, max_length=80)
+
+
+class RevokeDivineSessionRequest(StrictModel):
+    session_id: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+
+
+
+
 def _serialize_command(command: RuntimeCommand) -> dict[str, Any]:
     return {
         "sequence": command.sequence,
@@ -144,6 +158,7 @@ def create_app(
     governance_admin = GovernanceAdminService(repository)
     governance = DivineGovernanceService(repository)
     governance_query = GovernanceQueryService(repository)
+    divine_sessions = DivineSessionBindingService(repository)
     authenticator = authenticator or ActorAuthenticator.from_env(runtime_storage)
     bearer = HTTPBearer(auto_error=False)
 
@@ -467,6 +482,45 @@ def create_app(
             "reason": sanction.reason,
             "starts_at_utc": sanction.starts_at_utc.isoformat(),
             "expires_at_utc": sanction.expires_at_utc.isoformat() if sanction.expires_at_utc else None,
+        }
+
+    @app.post("/admin/divine-sessions/bind", tags=["admin"])
+    def bind_divine_session(
+        request: BindDivineSessionRequest,
+        creator: RuntimeActor = Depends(creator_actor),
+    ) -> dict[str, Any]:
+        binding = divine_sessions.bind(
+            session_id=request.session_id,
+            subject_id=request.subject_id,
+            actor_id=request.actor_id,
+            performed_by=creator.id,
+        )
+        return {
+            "session_hash": binding.session_hash,
+            "actor_id": binding.actor_id,
+            "status": binding.status,
+            "created_at_utc": binding.created_at_utc.isoformat(),
+        }
+
+    @app.post("/admin/divine-sessions/revoke", tags=["admin"])
+    def revoke_divine_session(
+        request: RevokeDivineSessionRequest,
+        creator: RuntimeActor = Depends(creator_actor),
+    ) -> dict[str, Any]:
+        binding = divine_sessions.revoke(
+            session_id=request.session_id,
+            reason=request.reason,
+            performed_by=creator.id,
+        )
+        return {
+            "session_hash": binding.session_hash,
+            "actor_id": binding.actor_id,
+            "status": binding.status,
+            "revoked_at_utc": (
+                binding.revoked_at_utc.isoformat()
+                if binding.revoked_at_utc is not None
+                else None
+            ),
         }
 
     @app.post("/admin/sanctions/{sanction_id}/lift", tags=["admin"])

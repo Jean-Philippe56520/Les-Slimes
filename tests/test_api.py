@@ -206,3 +206,64 @@ def test_inactive_actor_token_is_rejected(tmp_path):
     response = client.get("/me", headers=auth(tokens["chaos"]))
 
     assert response.status_code == 403
+
+
+
+def test_creator_can_bind_and_revoke_divine_chat_session(tmp_path):
+    _repo, _storage, tokens, client = build_api(tmp_path)
+
+    bound = client.post(
+        "/admin/divine-sessions/bind",
+        headers=auth(tokens["father"]),
+        json={
+            "session_id": "chat-session-order",
+            "subject_id": "same-user",
+            "actor_id": "order",
+        },
+    )
+    assert bound.status_code == 200
+    assert bound.json()["actor_id"] == "order"
+    assert bound.json()["status"] == "active"
+    assert bound.json()["session_hash"] != "chat-session-order"
+
+    revoked = client.post(
+        "/admin/divine-sessions/revoke",
+        headers=auth(tokens["father"]),
+        json={
+            "session_id": "chat-session-order",
+            "reason": "rotate operational conversation",
+        },
+    )
+    assert revoked.status_code == 200
+    assert revoked.json()["status"] == "revoked"
+    assert revoked.json()["revoked_at_utc"] is not None
+
+
+def test_non_creator_cannot_administer_divine_sessions(tmp_path):
+    _repo, _storage, tokens, client = build_api(tmp_path)
+
+    response = client.post(
+        "/admin/divine-sessions/bind",
+        headers=auth(tokens["chaos"]),
+        json={
+            "session_id": "chaos-chat",
+            "subject_id": "same-user",
+            "actor_id": "chaos",
+        },
+    )
+    assert response.status_code == 403
+
+
+def test_session_admin_rejects_unknown_actor(tmp_path):
+    _repo, _storage, tokens, client = build_api(tmp_path)
+
+    response = client.post(
+        "/admin/divine-sessions/bind",
+        headers=auth(tokens["father"]),
+        json={
+            "session_id": "observer-chat",
+            "subject_id": "same-user",
+            "actor_id": "observer",
+        },
+    )
+    assert response.status_code == 400

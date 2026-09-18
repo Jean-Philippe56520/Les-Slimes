@@ -129,6 +129,16 @@ Le budget reste imputé au dieu dont la proposition est promulguée. La saga de 
 
 Deux propositions valides séparément ne sont jamais supposées compatibles. Le Créateur peut exiger contrôle / Ordre / Chaos / combinaison avant toute implémentation ou promulgation.
 
+## Shadow runtime
+
+`DivineShadowCycleService` fournit le premier cycle autonome sûr. Il exige une identité de session liée, vérifie `identity.status`, lit le SHA de `main`, observe le Monde et la gouvernance puis ajoute uniquement une observation attribuée au journal.
+
+Le service shadow n'expose aucune soumission de commande canonique, aucun pouvoir d'administration, aucune écriture Git et aucune promulgation. Il sert à vérifier identité, confinement, qualité des observations et stabilité opérationnelle avant toute autonomie d'exécution.
+
+`CURRENT_READINESS` distingue explicitement les briques codées des briques réellement déployées. Le shadow logiciel est prêt ; l'adaptateur MCP de production, les providers réels confinés, l'instance canonique H24 vérifiée et la planification autonome restent désactivés.
+
+Le Père peut lier ou révoquer une conversation par les routes administratives `/admin/divine-sessions/bind` et `/admin/divine-sessions/revoke`. Les identifiants reçus servent seulement au calcul des hashes et ne sont pas persistés en clair.
+
 ## Activation progressive
 
 1. **shadow** : propositions Drive et décisions réelles, aucune implémentation automatique ;
