@@ -7,11 +7,10 @@ from typing import Any, Mapping
 
 from ..database.base import RelationalRepository
 from .access import DivineAccessPolicy
-from .actor_gateway import DivineRequestMetadata
 from .archive_gateway import ArchiveItem, ArchiveProvider, DivineArchiveGateway
 from .git_gateway import DivineGitGateway, ReadOnlyGitProvider
 from .legislation import DivineLegislationService, LawDossier, ProposalProvenance
-from .session_identity import DivineSessionBindingService
+from .session_identity import DivineRequestMetadata, DivineSessionBindingService
 
 
 def _sha256_text(value: str) -> str:
