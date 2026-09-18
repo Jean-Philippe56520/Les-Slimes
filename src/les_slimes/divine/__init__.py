@@ -1,7 +1,7 @@
 """Domain primitives for confined divine autonomy and sovereign review."""
 
 from .access import DivineAccessPolicy, DivineSurface
-from .actor_gateway import CanonicalApiProviderFactory, DivineActorGateway, DivineRequestMetadata
+from .actor_gateway import CanonicalApiProviderFactory, DivineActorGateway
 from .archive_gateway import (
     ArchiveItem,
     ArchiveProvider,
@@ -16,8 +16,9 @@ from .git_gateway import (
     PullRequestSnapshot,
     ReadOnlyGitProvider,
 )
-from .legislation import DivineLegislationService, LawDossier, LegislativeStatus
-from .session_identity import DivineSessionBinding, DivineSessionBindingService
+from .legislation import DivineLegislationService, LawDossier, LegislativeStatus, ProposalProvenance
+from .proposal_pipeline import DivineLawProposalPipeline, LawProposalDraft, LawProposalSubmission
+from .session_identity import DivineRequestMetadata, DivineSessionBinding, DivineSessionBindingService
 from .promulgation import (
     CreatorPromulgationService,
     PromulgationBlocked,
@@ -52,6 +53,7 @@ __all__ = [
     "DivineArchiveGateway",
     "DivineGitGateway",
     "DivineLegislationService",
+    "DivineLawProposalPipeline",
     "DivineSurface",
     "DivineSessionBinding",
     "DivineSessionBindingService",
@@ -59,11 +61,14 @@ __all__ = [
     "GitMergeResult",
     "ImplementationAuthorization",
     "LawCandidate",
+    "LawProposalDraft",
+    "LawProposalSubmission",
     "LawDossier",
     "LegislativeStatus",
     "MergeAuthorization",
     "PromulgationBlocked",
     "PromulgationResult",
+    "ProposalProvenance",
     "ReadOnlyGitProvider",
     "PullRequestSnapshot",
     "SovereignCreatorCycle",
