@@ -29,12 +29,19 @@ class GitMergeResult:
 
 
 @runtime_checkable
-class GitProvider(Protocol):
-    """Provider contract implemented outside the divine reasoning surface."""
+class ReadOnlyGitProvider(Protocol):
+    """Minimal provider contract for Order and Chaos; no write primitive exists."""
 
     def read_file(self, repository_full_name: str, path: str, ref: str) -> str: ...
 
     def search_code(self, repository_full_name: str, query: str) -> list[dict]: ...
+
+    def get_ref_sha(self, repository_full_name: str, ref: str) -> str: ...
+
+
+@runtime_checkable
+class CreatorGitProvider(ReadOnlyGitProvider, Protocol):
+    """Writer contract reserved to the Creator runtime."""
 
     def create_branch(
         self, repository_full_name: str, branch: str, base_ref: str
@@ -72,8 +79,6 @@ class GitProvider(Protocol):
         self, repository_full_name: str, commit_sha: str
     ) -> frozenset[str]: ...
 
-    def get_ref_sha(self, repository_full_name: str, ref: str) -> str: ...
-
     def merge_pull_request(
         self,
         repository_full_name: str,
@@ -86,7 +91,7 @@ class GitProvider(Protocol):
 class DivineGitGateway:
     """Read-only view of the single authorized Git repository for Order or Chaos."""
 
-    def __init__(self, actor_id: str, provider: GitProvider) -> None:
+    def __init__(self, actor_id: str, provider: ReadOnlyGitProvider) -> None:
         self.policy = DivineAccessPolicy(actor_id)
         self.provider = provider
         self.policy.assert_git_read_only()
@@ -115,7 +120,7 @@ class DivineGitGateway:
 class CreatorGitGateway:
     """Sovereign Git writer for implementation and promulgation."""
 
-    def __init__(self, provider: GitProvider) -> None:
+    def __init__(self, provider: CreatorGitProvider) -> None:
         self.provider = provider
 
     @staticmethod
