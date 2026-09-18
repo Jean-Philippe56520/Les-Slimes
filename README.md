@@ -116,7 +116,7 @@ Une `CreatorImplementation` enregistre ensuite branche, PR, head/base SHA, fichi
 
 Les surfaces de gouvernance, identité, authentification, persistance canonique, runtime, frontière divine, CI, déploiement, frontend, documentation et tests protecteurs restent hors des Lois ordinaires proposées par les dieux.
 
-**Important :** les contrats sont codés mais les providers de production et credentials minimaux ne sont pas encore déployés. Les cycles autonomes restent désactivés.
+**Important :** le binding de sessions, la gateway actorielle, le pipeline de propositions et le shadow runtime sont codés et testés. Les providers de production, l'adaptateur MCP réel et les credentials minimaux ne sont pas encore déployés. Les cycles autonomes d'exécution restent désactivés.
 
 Voir `docs/DIVINE_AUTONOMY.md`, `docs/GOD_CREATOR_INSTRUCTIONS.md` et `docs/PROJECT_STATE.md`.
 
