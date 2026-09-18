@@ -6,6 +6,7 @@ from ..database.base import RelationalRepository
 from ..runtime.storage import RuntimeStorage
 from .archive_gateway import ArchiveProvider, DivineArchiveGateway
 from .git_gateway import DivineGitGateway, ReadOnlyGitProvider
+from .proposal_pipeline import DivineLawProposalPipeline, LawProposalDraft
 from .session_identity import DivineRequestMetadata, DivineSessionBindingService
 from .world_gateway import CanonicalApiProvider, DivineWorldGateway
 
@@ -40,6 +41,11 @@ class DivineActorGateway:
         self.archive_provider = archive_provider
         self.api_provider_factory = api_provider_factory
         self._archive_gateways: dict[str, DivineArchiveGateway] = {}
+        self.law_pipeline = DivineLawProposalPipeline(
+            repository,
+            git_provider=git_provider,
+            archive_provider=archive_provider,
+        )
 
     def _resolve_actor(self, meta: Mapping[str, Any]) -> str:
         request_meta = DivineRequestMetadata.from_meta(meta)
@@ -169,6 +175,39 @@ class DivineActorGateway:
             content=content,
             world_tick=world_tick,
             context=context,
+        )
+
+    def law_submit(
+        self,
+        meta: Mapping[str, Any],
+        *,
+        title: str,
+        observation: str,
+        hypothesis: str,
+        expected_benefit: str,
+        risk: str,
+        affected_files: tuple[str, ...],
+        patch_text: str,
+        tests_text: str = "",
+        results_text: str = "",
+        evidence: tuple[str, ...] = (),
+        experiment_refs: tuple[str, ...] = (),
+    ):
+        return self.law_pipeline.submit(
+            meta,
+            draft=LawProposalDraft(
+                title=title,
+                observation=observation,
+                hypothesis=hypothesis,
+                expected_benefit=expected_benefit,
+                risk=risk,
+                affected_files=affected_files,
+                patch_text=patch_text,
+                tests_text=tests_text,
+                results_text=results_text,
+                evidence=evidence,
+                experiment_refs=experiment_refs,
+            ),
         )
 
     def proposal_create(
