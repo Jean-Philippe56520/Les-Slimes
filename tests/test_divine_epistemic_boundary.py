@@ -40,7 +40,8 @@ class RecordingGitProvider:
         return frozenset()
 
     def get_ref_sha(self, repository_full_name, ref):
-        raise NotImplementedError
+        self.calls.append(("ref", repository_full_name, ref))
+        return "b" * 40
 
     def merge_pull_request(self, repository_full_name, *, pr_number, expected_head_sha):
         raise AssertionError("Divine gateway must never expose merge")
@@ -49,7 +50,6 @@ class RecordingGitProvider:
 def test_each_god_reads_own_instruction_but_not_the_other():
     chaos = DivineAccessPolicy("chaos")
     order = DivineAccessPolicy("order")
-
     assert chaos.can_divine_read_path("docs/GOD_CHAOS_INSTRUCTIONS.md")
     assert not chaos.can_divine_read_path("docs/GOD_ORDER_INSTRUCTIONS.md")
     assert order.can_divine_read_path("docs/GOD_ORDER_INSTRUCTIONS.md")
@@ -58,7 +58,6 @@ def test_each_god_reads_own_instruction_but_not_the_other():
 
 def test_common_canon_and_world_code_are_visible_but_creator_docs_are_not():
     policy = DivineAccessPolicy("chaos")
-
     for path in (
         "docs/GOD_WORLD_CANON.md",
         "docs/GOD_GOVERNANCE_CANON.md",
@@ -68,7 +67,6 @@ def test_common_canon_and_world_code_are_visible_but_creator_docs_are_not():
         "config/default.yaml",
     ):
         assert policy.can_divine_read_path(path)
-
     for path in (
         "README.md",
         "docs/PROJECT_STATE.md",
@@ -86,7 +84,6 @@ def test_common_canon_and_world_code_are_visible_but_creator_docs_are_not():
 def test_direct_forbidden_read_stops_before_provider_call():
     provider = RecordingGitProvider()
     gateway = DivineGitGateway("chaos", provider)
-
     with pytest.raises(PermissionError, match="knowledge surface"):
         gateway.read_file("docs/PROJECT_STATE.md")
     with pytest.raises(PermissionError, match="knowledge surface"):
@@ -95,7 +92,6 @@ def test_direct_forbidden_read_stops_before_provider_call():
         gateway.read_file("docs/GOD_CREATOR_INSTRUCTIONS.md")
     with pytest.raises(PermissionError, match="knowledge surface"):
         gateway.read_file("docs/GOD_ORDER_INSTRUCTIONS.md")
-
     assert provider.calls == []
 
 
@@ -109,11 +105,24 @@ def test_search_filters_forbidden_results_after_scoped_provider_search():
         {"text": "missing path"},
     ]
     gateway = DivineGitGateway("chaos", provider)
-
     results = gateway.search_code("World")
-
     assert results == [{"path": "src/les_slimes/world/engine.py", "text": "World"}]
     assert len(provider.calls) == 1
+
+
+def test_divine_git_gateway_is_structurally_read_only():
+    provider = RecordingGitProvider()
+    gateway = DivineGitGateway("chaos", provider)
+    assert gateway.main_sha() == "b" * 40
+    for forbidden_method in (
+        "create_branch",
+        "write_file",
+        "open_law_pr",
+        "merge",
+        "create_pull_request",
+    ):
+        assert not hasattr(gateway, forbidden_method)
+    assert not any(call[0] in {"branch", "write", "pr"} for call in provider.calls)
 
 
 @pytest.mark.parametrize(
@@ -132,9 +141,9 @@ def test_search_filters_forbidden_results_after_scoped_provider_search():
         "pyproject.toml",
     ],
 )
-def test_divine_law_cannot_write_protected_infrastructure(path):
+def test_proposed_law_cannot_target_protected_infrastructure(path):
     with pytest.raises(PermissionError):
-        DivineAccessPolicy("order").assert_divine_write_path(path)
+        DivineAccessPolicy("order").assert_law_target_path(path)
 
 
 @pytest.mark.parametrize(
@@ -149,20 +158,5 @@ def test_divine_law_cannot_write_protected_infrastructure(path):
         "tests/test_cognition.py",
     ],
 )
-def test_divine_law_keeps_deep_engine_write_capability(path):
-    assert DivineAccessPolicy("chaos").assert_divine_write_path(path) == path
-
-
-def test_forbidden_write_stops_before_provider_call():
-    provider = RecordingGitProvider()
-    gateway = DivineGitGateway("chaos", provider)
-
-    with pytest.raises(PermissionError):
-        gateway.write_file(
-            path="src/les_slimes/divine/access.py",
-            branch="god/chaos/bypass",
-            content="bypass",
-            message="feat: bypass",
-        )
-
-    assert provider.calls == []
+def test_proposed_law_keeps_deep_engine_scope(path):
+    assert DivineAccessPolicy("chaos").assert_law_target_path(path) == path

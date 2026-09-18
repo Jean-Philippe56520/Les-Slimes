@@ -67,7 +67,7 @@ Aucun dieu n'est intrinsèquement bon ou mauvais. La doctrine oriente l'analyse 
 1. Observation : lecture et analyse.
 2. Miracle : commande allowlistée déjà prévue par le moteur.
 3. Décret : règle déclarative utilisant le DSL existant.
-4. Loi : modification limitée du moteur Python, normalement couverte par budget législatif et réalisée via branche/PR GitHub.
+4. Loi : proposition de modification limitée du moteur, préparée par un dieu hors Git puis éventuellement implémentée dans GitHub uniquement par le Créateur.
 5. Transgression : modification interne hors budget/autorité, rare, attribuée, journalisée, réversible et sanctionnable.
 
 Ordre, Chaos et le Héraut démarrent au niveau Observation. Le Créateur possède le niveau maximal.
@@ -90,7 +90,7 @@ Les commandes existantes sont classifiées ainsi :
 - nourriture, signal, ajout/retrait de mystère : Miracle, budget `miracle` ;
 - ajout/retrait de règle DSL : Décret, budget `legislative`.
 
-Les Lois restent des changements GitHub du moteur ; elles ne deviennent pas des commandes du `World`.
+Les Lois promulguées restent des changements GitHub du moteur, mais Ordre et Chaos n'écrivent jamais eux-mêmes dans GitHub. Leurs projets de Loi sont des dossiers persistants adossés à des artefacts Drive ; le Créateur seul produit l'implémentation Git. Elles ne deviennent pas des commandes du `World`.
 
 ## Budgets
 
@@ -224,14 +224,18 @@ Aucun dieu ne peut :
 - modifier les garde-fous pour augmenter ses droits ;
 - écrire directement dans la base active en contournant command queue + worker.
 
-## Branches divines
+## Ateliers législatifs divins
 
-Toute modification substantielle part de `main` à jour :
-- `god/order/<slug>`
-- `god/chaos/<slug>`
+GitHub est strictement en lecture seule pour Ordre et Chaos. Ils ne créent aucune branche, aucun commit, aucun push et aucune pull request.
 
-Avant : vérifier main/commits, lire code/tests, documenter observation, hypothèse, bénéfice, risque et budget.
-Après : syntaxe/imports, tests ciblés, suite complète si moteur/RNG/DB/worker/persistance, save/reload/digest si pertinent, contrôle du diff, journalisation, push et vérification distante.
+Une proposition substantielle part de `main` lu à jour. Le dieu peut travailler dans un atelier ou fork non canonique sans credential Git d'écriture, y exécuter ses tests et produire un patch. Il dépose ensuite ses artefacts dans son atelier Drive :
+
+- Ordre : `ORDER_PROPOSALS` (`1VbYXIt8hU4UEAVYIvWMob7SL0G3-lcOC`) ;
+- Chaos : `CHAOS_PROPOSALS` (`1i5L-8aOCvrwc3Buck3hhJnFydvlFXc2v`).
+
+Le dossier transactionnel conserve SHA source, identifiant Drive, digests, fichiers visés, preuves et expériences. Une acceptation par le Créateur n'écrit rien dans GitHub : elle autorise seulement la reprise de la proposition.
+
+Si le Créateur l'implémente, lui seul crée `father/law-<proposal_id>-<slug>`, écrit le code, ouvre la PR, exécute les Épreuves et attache l'implémentation exacte au dossier. La promulgation revalide ensuite branche, PR, SHA, fichiers réels, checks, gouvernance et budget.
 
 ## Conseil divin
 

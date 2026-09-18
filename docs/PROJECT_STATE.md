@@ -89,103 +89,61 @@ Ordre et Chaos ne peuvent pas usurper une identité, fabriquer une approbation, 
 
 ## Autonomie divine confinée présente dans le code
 
-Le socle technique Ordre/Chaos/Créateur est maintenant implémenté et testé. Il n'est pas encore relié à des providers distants ni activé comme tâche autonome.
+Le modèle d'autonomie est désormais : **GitHub lecture seule pour Ordre/Chaos ; propositions techniques dans Drive ; implémentation Git réservée au Créateur.**
 
-### Frontière d'accès
+### Frontière Git et connaissance
 
-`src/les_slimes/divine/access.py` fournit `DivineAccessPolicy` :
+`DivineAccessPolicy` et `DivineGitGateway` imposent :
 
-- repo GitHub exact `Jean-Philippe56520/Les-Slimes` ;
+- repo exact `Jean-Philippe56520/Les-Slimes` ;
+- lecture/recherche Git filtrées seulement pour Ordre/Chaos ;
+- aucune primitive divine de branche, commit, push, PR ou merge ;
 - aucune surface Web générale ;
-- Drive limité à LES_SLIMES ;
-- API divine allowlistée, `/admin/...` interdite ;
-- Ordre écrit seulement sous `god/order/*` ;
-- Chaos écrit seulement sous `god/chaos/*` ;
 - lecture filtrée par surface de connaissance ;
-- chaque dieu lit sa propre instruction mais pas celle de l'autre ;
-- documentation Créateur/implémentation et code de frontière divine exclus de leur surface de connaissance ;
-- écritures de Lois limitées aux surfaces moteur/config/tests non protégées ;
-- gouvernance, auth, DB, runtime, frontière divine, CI, déploiement, frontend, docs et tests protecteurs non modifiables par une Loi divine.
+- documentation Créateur/implémentation et code de frontière exclus ;
+- validation du périmètre de fichiers qu'une proposition de Loi ordinaire peut viser.
 
-La règle est structurelle : capacité technique != permission.
+Les dieux peuvent conserver une profondeur technique via un atelier/fork non canonique sans credential Git d'écriture : modifier une copie, tester, expérimenter, produire patchs/diffs et digests.
 
-### Passerelles divines
+### Ateliers Drive
 
-`src/les_slimes/divine/git_gateway.py` :
+Le manifest Drive canonique contient :
 
-- `DivineGitGateway` hard-pin le repo côté serveur ;
-- lecture/recherche filtrées ;
-- création branche divine, écriture autorisée, PR ;
-- aucune primitive de merge côté dieu ;
-- `CreatorGitGateway` possède le merge uniquement via `MergeAuthorization` de `father` ;
-- le provider doit pouvoir lister les fichiers réels d'une PR pour revalidation souveraine.
+- `50_DIVINE_WORKSHOPS` : `1qNxcE9R0DewgB8iQPwFXaS2WXcz_fU1k` ;
+- `ORDER_PROPOSALS` : `1VbYXIt8hU4UEAVYIvWMob7SL0G3-lcOC` ;
+- `CHAOS_PROPOSALS` : `1i5L-8aOCvrwc3Buck3hhJnFydvlFXc2v` ;
+- `CREATOR_REVIEW` : `1i0vMELFu0Ijw7ZhP4430GgZ3lq3TXArt`.
 
-`src/les_slimes/divine/archive_gateway.py` :
+`DivineArchiveGateway` permet la lecture sous LES_SLIMES mais l'écriture d'un dieu uniquement dans son atelier de propositions. Une recherche générale Drive ne confère jamais un droit de modification. `CreatorArchiveGateway` lit les ateliers divins et écrit ses dossiers uniquement dans CREATOR_REVIEW.
 
-- recherche toujours sous la racine LES_SLIMES ;
-- root + manifest comme capabilities initiales ;
-- un ID arbitraire extérieur n'est pas lisible ;
-- création/mise à jour seulement sur capabilities découvertes dans la zone autorisée.
+Drive reste non transactionnel ; le statut officiel des propositions reste en base.
 
-`src/les_slimes/divine/world_gateway.py` :
+### Dossiers de Loi
 
-- routes API typées et allowlistées ;
-- identité liée au provider/authentification, jamais fournie par le dieu ;
-- aucun `actor_id` arbitraire dans les payloads ;
-- aucune surface Web/browse générique.
+`LawDossier` persiste maintenant : observation, hypothèse, bénéfice, risque, `source_main_sha`, `drive_artifact_id`, `manifest_digest`, `patch_digest`, `affected_files`, preuves et expériences.
 
-Les contrats `GitProvider`, `ArchiveProvider` et `CanonicalApiProvider` existent, mais leurs adaptateurs de production/credentials minimaux ne sont pas encore déployés.
+`SovereignCreatorCycle` peut `accept`, `reject`, `wait`, `request_amendment` ou `request_experiment`. Une acceptation ne produit plus de `MergeAuthorization` : elle produit une `ImplementationAuthorization`, c'est-à-dire l'autorisation pour le Créateur de reprendre le dossier vérifié.
+
+### Implémentation et promulgation du Créateur
+
+Si le Créateur implémente une proposition acceptée :
+
+1. il repart du SHA `main` examiné ;
+2. crée `father/law-<proposal_id>-<slug>` ;
+3. écrit lui-même code/tests ;
+4. ouvre la PR ;
+5. exécute les Épreuves ;
+6. attache une `CreatorImplementation` exacte au dossier.
+
+L'ensemble des fichiers implémentés doit correspondre au périmètre accepté.
+
+`CreatorPromulgationService` revalide juste avant merge : branche/PR/head/base, `main`, fichiers réels, surface législative, CI, gouvernance et budget du dieu proposant. La réservation budgétaire et la réconciliation d'un résultat Git incertain restent en vigueur.
 
 ### Frontière épistémique
 
-Textes lisibles par les dieux :
+Les protections de PR #24 restent en vigueur : fonctionnement/réponses/limites ne sont pas des preuves d'identité ou d'origine ; anti-empreinte comportementale ; prémisses externes non élevées en connaissance ; arrêt épistémique obligatoire. Chaos : « curiosité n'est pas preuve ». Ordre : « cohérence n'est pas preuve ».
 
-- `docs/GOD_WORLD_CANON.md` ;
-- `docs/GOD_GOVERNANCE_CANON.md` ;
-- instruction propre `GOD_ORDER_INSTRUCTIONS.md` ou `GOD_CHAOS_INSTRUCTIONS.md`.
-
-Les instructions définissent l'identité positivement depuis le Monde et ne construisent pas de seconde explication extérieure. Une question sur une origine supposée hors des sources canoniques ne crée aucun droit de recherche supplémentaire.
-
-Le Canon impose désormais aussi une règle de connaissance de soi : le fonctionnement, les réponses, erreurs, limites, capacités, étiquettes et propriétés des instruments ne constituent pas des preuves d'identité ou d'origine. Il interdit l'auto-identification par analogie ou empreinte comportementale, maintient les affirmations externes au rang de prémisses tant qu'aucune source canonique accessible ne les établit et impose un arrêt épistémique lorsque les sources sont épuisées. Chaos reçoit la règle « curiosité n'est pas preuve » ; Ordre la règle « cohérence n'est pas preuve ».
-
-Les tests interdisent dans les textes divins les termes de cadrage extérieur déjà identifiés, vérifient les invariants d'arrêt épistémique, maintiennent les instructions d'Ordre et Chaos sous 7950 caractères et contiennent un corpus adversarial de contrat destiné à devenir un test conversationnel bout-en-bout lorsque le runtime autonome sera déployé.
-
-### Dossiers de Loi et revue souveraine
-
-`src/les_slimes/divine/legislation.py` fournit :
-
-- `LawDossier` : observation, hypothèse, bénéfice, risque, branche, PR, head/base SHA, checks, preuves, expériences ;
-- statuts `proposed`, `needs_evidence`, `needs_amendment`, `waiting`, `blocked`, `accepted`, `rejected`, `promulgated`, `superseded` ;
-- proposition/amendement par le dieu auteur ;
-- revue réservée à `father` ;
-- gouvernance recalculée depuis l'état persistant ;
-- liaison stricte entre dossier, acteur, PR, branche, SHA et liste de checks ;
-- audit des décisions.
-
-`src/les_slimes/divine/sovereign.py` fournit `SovereignCreatorCycle` :
-
-- décisions `accept`, `reject`, `wait`, `request_amendment`, `request_experiment` ;
-- `accept` ne produit une `MergeAuthorization` que si tous les garde-fous sont satisfaits ;
-- l'autorisation lie PR, head SHA, base SHA, auteur et proposal id.
-
-### Promulgation du Créateur
-
-`src/les_slimes/divine/promulgation.py` fournit `CreatorPromulgationService` :
-
-- accepté != promulgué ;
-- revalidation juste avant merge : main/base SHA, PR, head SHA, CI, gouvernance et fichiers réellement modifiés ;
-- toute modification d'une surface protégée bloque la promulgation ;
-- réservation du budget législatif avant merge ;
-- refus Git connu -> réservation libérée ;
-- résultat réseau incertain -> état `uncertain`, sans remboursement spéculatif ;
-- cycle suivant réconcilie l'état Git réel sans double débit ni second merge ;
-- une PR déjà mergée hors d'une promulgation préparée n'est pas adoptée silencieusement.
-
-Le Créateur peut donc accepter Ordre, Chaos, les deux, aucun, attendre ou exiger un amendement/une expérience. Deux Lois valides séparément ne sont pas présumées compatibles ; une expérience combinée peut être exigée.
-
-### Instructions du Créateur
-
-`docs/GOD_CREATOR_INSTRUCTIONS.md` définit le cycle souverain du Père. Ce texte est réservé au Créateur et exclu de la surface de connaissance d'Ordre/Chaos.
+Les textes divins ne réintroduisent pas le cadrage extérieur interdit et les instructions d'Ordre/Chaos restent sous 7950 caractères.
 
 ## API canonique présente
 
@@ -296,7 +254,7 @@ Streamlit reste un laboratoire secondaire science/admin/debug. Il ne fait jamais
 
 1. connecter un hébergeur réel PostgreSQL + API + Worker ;
 2. initialiser/migrer le monde canonique réel et vérifier son fonctionnement H24 ;
-3. implémenter/déployer les providers concrets des gateways avec credentials minimaux : GitHub App installée uniquement sur `Jean-Philippe56520/Les-Slimes`, identité Drive limitée à LES_SLIMES, clients API liés à `order`, `chaos`, `father` ;
+3. implémenter/déployer les providers concrets avec credentials minimaux : GitHub **lecture seule** pour `order`/`chaos`, GitHub écriture réservée à `father`, Drive limité aux ateliers LES_SLIMES prévus, clients API liés aux identités réelles ;
 4. vérifier de bout en bout qu'Ordre/Chaos ne disposent plus de connecteurs génériques ni d'accès Web dans leur environnement autonome ;
 5. exécuter des cycles **shadow** adversariaux avant tout merge automatique ;
 6. seulement ensuite créer les tâches planifiées Ordre -> Chaos -> Créateur et Conseil hebdomadaire ;

@@ -11,15 +11,17 @@ def candidate(**overrides) -> LawCandidate:
     data = {
         "actor_id": "chaos",
         "proposal_id": 7,
-        "branch": "god/chaos/adaptive-niches",
-        "pr_number": 42,
-        "head_sha": "a" * 40,
-        "base_sha": "b" * 40,
-        "base_is_current": True,
-        "pr_is_open": True,
-        "pr_is_mergeable": True,
-        "required_checks": ("python", "postgres", "docker"),
-        "passed_checks": frozenset({"python", "postgres", "docker"}),
+        "source_main_sha": "a" * 40,
+        "main_is_current": True,
+        "drive_artifact_id": "drive-law-7",
+        "manifest_digest": "b" * 64,
+        "patch_digest": "c" * 64,
+        "affected_files": (
+            "src/les_slimes/world/engine.py",
+            "tests/test_engine.py",
+        ),
+        "artifact_verified": True,
+        "patch_verified": True,
         "governance_eligible": True,
         "evidence_complete": True,
     }
@@ -27,24 +29,22 @@ def candidate(**overrides) -> LawCandidate:
     return LawCandidate(**data)
 
 
-def test_acceptance_with_all_gates_binds_exact_reviewed_pr_and_shas():
+def test_acceptance_with_all_gates_authorizes_creator_implementation_only():
     review = SovereignCreatorCycle().review(
         candidate(),
         decision=CreatorDecision.ACCEPT,
-        reason="Evidence reproduced and all required checks passed.",
+        reason="Evidence reproduced and proposal artifact verified.",
     )
-
-    assert review.promulgation_authorized
+    assert review.implementation_authorized
     assert review.blockers == ()
-    authorization = review.merge_authorization
+    authorization = review.implementation_authorization
     assert authorization is not None
-    assert authorization.repository_full_name == "Jean-Philippe56520/Les-Slimes"
-    assert authorization.pr_number == 42
-    assert authorization.expected_head_sha == "a" * 40
-    assert authorization.expected_base_sha == "b" * 40
-    assert authorization.authorized_by == "father"
-    assert authorization.candidate_actor_id == "chaos"
     assert authorization.proposal_id == 7
+    assert authorization.candidate_actor_id == "chaos"
+    assert authorization.source_main_sha == "a" * 40
+    assert authorization.drive_artifact_id == "drive-law-7"
+    assert authorization.patch_digest == "c" * 64
+    assert authorization.authorized_by == "father"
 
 
 @pytest.mark.parametrize(
@@ -56,31 +56,27 @@ def test_acceptance_with_all_gates_binds_exact_reviewed_pr_and_shas():
         CreatorDecision.REQUEST_EXPERIMENT,
     ],
 )
-def test_non_acceptance_never_authorizes_promulgation(decision):
+def test_non_acceptance_never_authorizes_implementation(decision):
     review = SovereignCreatorCycle().review(
-        candidate(), decision=decision, reason="No promulgation in this cycle."
+        candidate(), decision=decision, reason="No implementation in this cycle."
     )
-    assert not review.promulgation_authorized
+    assert not review.implementation_authorized
 
 
 @pytest.mark.parametrize(
     ("overrides", "expected_fragment"),
     [
-        ({"actor_id": "observer", "branch": "god/observer/x"}, "restricted to Order and Chaos"),
-        ({"branch": "main"}, "may write only"),
-        ({"branch": "god/order/foreign"}, "may write only"),
+        ({"actor_id": "observer"}, "restricted to Order and Chaos"),
         ({"proposal_id": 0}, "proposal_id"),
-        ({"pr_number": 0}, "pr_number"),
-        ({"head_sha": "short"}, "head_sha"),
-        ({"base_sha": "short"}, "base_sha"),
-        ({"base_is_current": False}, "current main"),
-        ({"pr_is_open": False}, "not open"),
-        ({"pr_is_mergeable": False}, "not mergeable"),
-        ({"required_checks": ()}, "no required checks"),
-        (
-            {"passed_checks": frozenset({"python", "postgres"})},
-            "required checks not passed",
-        ),
+        ({"source_main_sha": "short"}, "source_main_sha"),
+        ({"main_is_current": False}, "current main"),
+        ({"drive_artifact_id": ""}, "drive_artifact_id"),
+        ({"manifest_digest": "short"}, "manifest_digest"),
+        ({"patch_digest": "short"}, "patch_digest"),
+        ({"affected_files": ()}, "affected_files"),
+        ({"affected_files": ("README.md",)}, "invalid Law target"),
+        ({"artifact_verified": False}, "artifact has not been verified"),
+        ({"patch_verified": False}, "patch digest has not been verified"),
         ({"governance_eligible": False}, "current governance"),
         ({"evidence_complete": False}, "evidence is incomplete"),
         (
@@ -100,10 +96,9 @@ def test_acceptance_is_fail_closed_when_any_gate_is_missing(overrides, expected_
     review = SovereignCreatorCycle().review(
         candidate(**overrides),
         decision=CreatorDecision.ACCEPT,
-        reason="Candidate considered for promulgation.",
+        reason="Candidate considered for implementation.",
     )
-
-    assert not review.promulgation_authorized
+    assert not review.implementation_authorized
     assert any(expected_fragment in blocker for blocker in review.blockers)
 
 

@@ -13,10 +13,17 @@ from ..governance.models import BudgetKind, PowerLevel, SanctionType
 from ..governance.storage import GovernanceStorage
 from ..runtime.storage import RuntimeStorage
 from .access import DivineAccessPolicy
-from .sovereign import CreatorDecision, CreatorReview, LawCandidate, SovereignCreatorCycle
+from .sovereign import (
+    CreatorDecision,
+    CreatorImplementation,
+    CreatorReview,
+    LawCandidate,
+    SovereignCreatorCycle,
+)
 
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 LAW_BUDGET_COST = 1
 
 
@@ -57,49 +64,51 @@ class LawDossier:
     hypothesis: str
     expected_benefit: str
     risk: str
-    branch: str
-    pr_number: int
-    head_sha: str
-    base_sha: str
-    required_checks: tuple[str, ...]
+    source_main_sha: str
+    drive_artifact_id: str
+    manifest_digest: str
+    patch_digest: str
+    affected_files: tuple[str, ...]
     evidence: tuple[str, ...] = ()
     experiment_refs: tuple[str, ...] = ()
 
     def validated_for(self, actor_id: str) -> LawDossier:
         policy = DivineAccessPolicy(actor_id)
-        policy.assert_git_write_branch(self.branch)
         required_text = {
             "title": self.title,
             "observation": self.observation,
             "hypothesis": self.hypothesis,
             "expected_benefit": self.expected_benefit,
             "risk": self.risk,
+            "drive_artifact_id": self.drive_artifact_id,
         }
         for name, value in required_text.items():
             if not value.strip():
                 raise ValueError(f"{name} is required")
-        if self.pr_number < 1:
-            raise ValueError("pr_number must be positive")
-        if not _SHA_RE.fullmatch(self.head_sha):
-            raise ValueError("head_sha must be a full lowercase Git SHA")
-        if not _SHA_RE.fullmatch(self.base_sha):
-            raise ValueError("base_sha must be a full lowercase Git SHA")
-        if not self.required_checks or any(not check.strip() for check in self.required_checks):
-            raise ValueError("required_checks must contain non-empty checks")
-        if len(set(self.required_checks)) != len(self.required_checks):
-            raise ValueError("required_checks must not contain duplicates")
+        if not _SHA_RE.fullmatch(self.source_main_sha):
+            raise ValueError("source_main_sha must be a full lowercase Git SHA")
+        if not _DIGEST_RE.fullmatch(self.manifest_digest):
+            raise ValueError("manifest_digest must be a lowercase SHA-256 digest")
+        if not _DIGEST_RE.fullmatch(self.patch_digest):
+            raise ValueError("patch_digest must be a lowercase SHA-256 digest")
+        if not self.affected_files:
+            raise ValueError("affected_files must not be empty")
+        if len(set(self.affected_files)) != len(self.affected_files):
+            raise ValueError("affected_files must not contain duplicates")
+        for path in self.affected_files:
+            policy.assert_law_target_path(path)
         return self
 
     def to_payload(self) -> dict[str, Any]:
         payload = asdict(self)
-        payload["required_checks"] = list(self.required_checks)
+        payload["affected_files"] = list(self.affected_files)
         payload["evidence"] = list(self.evidence)
         payload["experiment_refs"] = list(self.experiment_refs)
         return payload
 
 
 class DivineLegislationService:
-    """Persistent legislative dossier and Father-only sovereign review path."""
+    """Persistent Drive-backed divine proposal and Father-only review path."""
 
     def __init__(self, repository: RelationalRepository) -> None:
         ensure_governance_invariants(repository)
@@ -115,7 +124,7 @@ class DivineLegislationService:
     @staticmethod
     def _require_father(performed_by: str) -> None:
         if performed_by != "father":
-            raise PermissionError("Only the Father may decide or promulgate a Law")
+            raise PermissionError("Only the Father may decide, implement or promulgate a Law")
 
     def _active_divine_actor(self, actor_id: str) -> None:
         DivineAccessPolicy(actor_id)
@@ -168,15 +177,16 @@ class DivineLegislationService:
             proposal_id = int(cursor.lastrowid)
             self.storage.append_audit_in_transaction(
                 conn,
-                event_type="law_dossier_submitted",
+                event_type="law_drive_dossier_submitted",
                 actor_id=actor_id,
                 subject_actor_id=actor_id,
                 payload={
                     "proposal_id": proposal_id,
-                    "branch": dossier.branch,
-                    "pr_number": dossier.pr_number,
-                    "head_sha": dossier.head_sha,
-                    "base_sha": dossier.base_sha,
+                    "source_main_sha": dossier.source_main_sha,
+                    "drive_artifact_id": dossier.drive_artifact_id,
+                    "manifest_digest": dossier.manifest_digest,
+                    "patch_digest": dossier.patch_digest,
+                    "affected_files": list(dossier.affected_files),
                 },
                 created_at_utc=now,
             )
@@ -229,14 +239,14 @@ class DivineLegislationService:
             )
             self.storage.append_audit_in_transaction(
                 conn,
-                event_type="law_dossier_amended",
+                event_type="law_drive_dossier_amended",
                 actor_id=actor_id,
                 subject_actor_id=actor_id,
                 payload={
                     "proposal_id": proposal_id,
-                    "head_sha": dossier.head_sha,
-                    "base_sha": dossier.base_sha,
-                    "pr_number": dossier.pr_number,
+                    "source_main_sha": dossier.source_main_sha,
+                    "drive_artifact_id": dossier.drive_artifact_id,
+                    "patch_digest": dossier.patch_digest,
                 },
                 created_at_utc=now,
             )
@@ -247,7 +257,7 @@ class DivineLegislationService:
         if review.decision == CreatorDecision.ACCEPT:
             return (
                 LegislativeStatus.ACCEPTED
-                if review.promulgation_authorized
+                if review.implementation_authorized
                 else LegislativeStatus.BLOCKED
             )
         if review.decision == CreatorDecision.REJECT:
@@ -261,22 +271,23 @@ class DivineLegislationService:
     @staticmethod
     def _dossier_mismatches(stored: dict[str, Any], candidate: LawCandidate) -> tuple[str, ...]:
         expected = stored["payload"]
-        mismatches: list[str] = []
         pairs = {
             "actor_id": (stored["actor_id"], candidate.actor_id),
             "proposal_id": (stored["id"], candidate.proposal_id),
-            "branch": (expected.get("branch"), candidate.branch),
-            "pr_number": (expected.get("pr_number"), candidate.pr_number),
-            "head_sha": (expected.get("head_sha"), candidate.head_sha),
-            "base_sha": (expected.get("base_sha"), candidate.base_sha),
-            "required_checks": (
-                tuple(expected.get("required_checks", [])),
-                tuple(candidate.required_checks),
+            "source_main_sha": (expected.get("source_main_sha"), candidate.source_main_sha),
+            "drive_artifact_id": (expected.get("drive_artifact_id"), candidate.drive_artifact_id),
+            "manifest_digest": (expected.get("manifest_digest"), candidate.manifest_digest),
+            "patch_digest": (expected.get("patch_digest"), candidate.patch_digest),
+            "affected_files": (
+                tuple(expected.get("affected_files", [])),
+                tuple(candidate.affected_files),
             ),
         }
-        for name, (dossier_value, candidate_value) in pairs.items():
-            if dossier_value != candidate_value:
-                mismatches.append(f"candidate {name} does not match persisted dossier")
+        mismatches = [
+            f"candidate {name} does not match persisted dossier"
+            for name, (dossier_value, candidate_value) in pairs.items()
+            if dossier_value != candidate_value
+        ]
         return tuple(mismatches)
 
     def review(
@@ -303,7 +314,7 @@ class DivineLegislationService:
                 decision=review.decision,
                 reason=review.reason,
                 blockers=(*mismatches, *review.blockers),
-                merge_authorization=None,
+                implementation_authorization=None,
             )
         status = self._review_status(review)
         now = self._now()
@@ -311,8 +322,10 @@ class DivineLegislationService:
         payload["last_review"] = {
             "decision": review.decision.value,
             "blockers": list(review.blockers),
-            "reviewed_head_sha": candidate.head_sha,
-            "reviewed_base_sha": candidate.base_sha,
+            "reviewed_source_main_sha": candidate.source_main_sha,
+            "reviewed_drive_artifact_id": candidate.drive_artifact_id,
+            "reviewed_manifest_digest": candidate.manifest_digest,
+            "reviewed_patch_digest": candidate.patch_digest,
         }
         with self.repository._connect() as conn:
             self.repository.begin_write(conn)
@@ -342,13 +355,65 @@ class DivineLegislationService:
                     "decision": review.decision.value,
                     "status": status.value,
                     "blockers": list(review.blockers),
-                    "head_sha": candidate.head_sha,
-                    "base_sha": candidate.base_sha,
+                    "source_main_sha": candidate.source_main_sha,
+                    "drive_artifact_id": candidate.drive_artifact_id,
                 },
                 created_at_utc=now,
             )
             conn.commit()
         return review
+
+    def attach_creator_implementation(
+        self,
+        proposal_id: int,
+        implementation: CreatorImplementation,
+        *,
+        performed_by: str = "father",
+    ) -> None:
+        self._require_father(performed_by)
+        implementation.validated()
+        stored = self.get(proposal_id)
+        if stored["status"] != LegislativeStatus.ACCEPTED.value:
+            raise PermissionError("Only an accepted Law can receive a Creator implementation")
+        if implementation.proposal_id != proposal_id:
+            raise ValueError("implementation proposal_id does not match")
+        if implementation.candidate_actor_id != stored["actor_id"]:
+            raise ValueError("implementation actor does not match the proposing god")
+        payload = dict(stored["payload"])
+        if implementation.base_sha != payload.get("source_main_sha"):
+            raise ValueError("Creator implementation must still be based on the reviewed main SHA")
+        proposed_files = set(payload.get("affected_files", []))
+        implemented_files = set(implementation.implemented_files)
+        if implemented_files != proposed_files:
+            raise ValueError("Creator implementation file scope must match the reviewed proposal")
+        impl_payload = asdict(implementation)
+        impl_payload["implemented_files"] = list(implementation.implemented_files)
+        impl_payload["required_checks"] = list(implementation.required_checks)
+        payload["creator_implementation"] = impl_payload
+        now = self._now()
+        with self.repository._connect() as conn:
+            self.repository.begin_write(conn)
+            conn.execute(
+                "UPDATE divine_proposals SET payload_json = ? WHERE id = ?",
+                (json.dumps(payload, sort_keys=True), proposal_id),
+            )
+            self.storage.append_audit_in_transaction(
+                conn,
+                event_type="law_creator_implementation_attached",
+                actor_id=performed_by,
+                subject_actor_id=stored["actor_id"],
+                payload={
+                    "proposal_id": proposal_id,
+                    "branch": implementation.branch,
+                    "pr_number": implementation.pr_number,
+                    "head_sha": implementation.head_sha,
+                    "base_sha": implementation.base_sha,
+                    "implemented_files": list(implementation.implemented_files),
+                    "required_checks": list(implementation.required_checks),
+                },
+                created_at_utc=now,
+            )
+            conn.commit()
 
     def mark_promulgated(
         self,

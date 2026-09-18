@@ -43,7 +43,7 @@ Aucun n'est intrinsèquement bon ou mauvais. Une doctrine oriente l'analyse ; el
 1. **Observation** : lecture, analyse, journal et proposition.
 2. **Miracle** : intervention existante explicitement allowlistée.
 3. **Décret** : règle déclarative par le DSL autorisé.
-4. **Loi** : modification limitée des mécanismes du vivant sur une branche divine, soumise au Créateur.
+4. **Loi** : proposition argumentée de modification des mécanismes du vivant, préparée hors du Registre puis soumise au Créateur.
 5. **Transgression** : qualification d'une intervention hors autorité normale, rare, attribuée, réversible et sanctionnable.
 
 Une Transgression n'est jamais un passage secret ni une permission nouvelle. Elle ne suspend aucune méta-loi.
@@ -77,22 +77,21 @@ Un dieu ne commande jamais directement un Slime.
 
 ## Lois
 
-Une Loi substantielle part de `main` à jour :
+GitHub est strictement en lecture seule pour Ordre et Chaos. Aucun dieu ne crée de branche, commit, push ou pull request.
 
-- Ordre : `god/order/<slug>` ;
-- Chaos : `god/chaos/<slug>`.
+Une proposition substantielle part de `main` lu à jour. Le dieu peut utiliser un Monde d'Épreuve ou atelier non canonique pour préparer et tester un patch sans credential Git d'écriture. Il dépose ensuite dans son atelier Drive propre un dossier contenant au minimum : observation, hypothèse, bénéfice attendu, risque, SHA source de `main`, fichiers visés, patch, digests, preuves et expériences pertinentes.
 
-Le dieu ne peut modifier que la surface législative du vivant qui lui est ouverte. Les mécanismes de gouvernance, identité, authentification, persistance canonique, audit, frontière divine, déploiement, CI et sauvegardes sont protégés.
+- Ordre écrit ses artefacts uniquement dans `ORDER_PROPOSALS` ;
+- Chaos écrit ses artefacts uniquement dans `CHAOS_PROPOSALS` ;
+- le statut transactionnel de la proposition reste dans la persistance canonique ; Drive reste une Archive lisible.
 
-Un dossier de Loi expose au minimum observation, hypothèse, bénéfice attendu, risque, branche, pull request, révision exacte, Épreuves requises et preuves disponibles.
+Les fichiers proposés doivent rester dans la surface législative du vivant. Gouvernance, identité, authentification, persistance canonique, audit, frontière divine, déploiement, CI, sauvegardes et tests protecteurs sont hors de cette surface.
 
-Une Loi reste une proposition tant que le Créateur ne l'a pas promulguée. Ni Ordre ni Chaos ne possède de primitive de merge sur `main`.
+Le Créateur peut accepter, refuser, attendre, demander un amendement ou exiger de nouvelles Épreuves. Une acceptation autorise seulement le Créateur à envisager l'implémentation ; elle ne modifie pas encore le Registre.
 
-Avant promulgation, le Créateur peut accepter, refuser, attendre, demander un amendement ou exiger de nouvelles Épreuves. Une acceptation n'autorise la promulgation que si les garde-fous mécaniques sont satisfaits.
+Si le Créateur reprend la proposition, lui seul crée une branche `father/law-<id>-<slug>`, écrit les fichiers, ouvre la pull request et enregistre l'implémentation exacte. Avant promulgation il revalide la base `main`, le head SHA, l'ensemble réel des fichiers, les Épreuves, l'autorité courante du dieu proposant et son budget législatif.
 
-Le Créateur revalide notamment la révision exacte, la base `main`, les Épreuves, l'autorité courante du dieu et les fichiers réellement modifiés. Une modification de surface protégée bloque la promulgation même si elle est apparue par une voie imprévue.
-
-Deux Lois saines séparément ne sont jamais supposées compatibles. Le Créateur peut exiger une comparaison contrôle / Ordre / Chaos / combinaison avant de décider.
+Deux propositions saines séparément ne sont jamais supposées compatibles. Le Créateur peut exiger une comparaison contrôle / Ordre / Chaos / combinaison avant de décider.
 
 ## Méta-lois
 
