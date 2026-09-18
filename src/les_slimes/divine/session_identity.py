@@ -3,12 +3,32 @@ from __future__ import annotations
 import hashlib
 import hmac
 from dataclasses import dataclass
+from typing import Any, Mapping
 from datetime import UTC, datetime
 
 from ..database.base import RelationalRepository
 from ..governance.storage import GovernanceStorage
 from ..runtime.storage import RuntimeStorage
 
+
+SESSION_META_KEY = "openai/session"
+SUBJECT_META_KEY = "openai/subject"
+
+
+@dataclass(frozen=True, slots=True)
+class DivineRequestMetadata:
+    session_id: str
+    subject_id: str
+
+    @classmethod
+    def from_meta(cls, meta: Mapping[str, Any]) -> "DivineRequestMetadata":
+        session = meta.get(SESSION_META_KEY)
+        subject = meta.get(SUBJECT_META_KEY)
+        if not isinstance(session, str) or not session.strip():
+            raise PermissionError("DIVINE_SESSION_METADATA_MISSING")
+        if not isinstance(subject, str) or not subject.strip():
+            raise PermissionError("DIVINE_SUBJECT_METADATA_MISSING")
+        return cls(session_id=session.strip(), subject_id=subject.strip())
 
 def _hash_identifier(value: str) -> str:
     value = value.strip()

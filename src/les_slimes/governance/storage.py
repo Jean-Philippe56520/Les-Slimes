@@ -118,6 +118,13 @@ CREATE TABLE IF NOT EXISTS divine_session_bindings (
 CREATE INDEX IF NOT EXISTS idx_divine_session_actor
 ON divine_session_bindings(actor_id, status);
 
+CREATE TABLE IF NOT EXISTS divine_proposal_provenance (
+    proposal_id INTEGER PRIMARY KEY,
+    session_hash TEXT NOT NULL,
+    subject_hash TEXT NOT NULL,
+    recorded_at_utc TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS divine_audit_log (
     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     previous_hash TEXT NOT NULL,

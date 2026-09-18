@@ -58,6 +58,19 @@ _TERMINAL_STATUSES = frozenset(
 
 
 @dataclass(frozen=True, slots=True)
+class ProposalProvenance:
+    session_hash: str
+    subject_hash: str
+
+    def validated(self) -> "ProposalProvenance":
+        if not _DIGEST_RE.fullmatch(self.session_hash):
+            raise ValueError("session_hash must be a lowercase SHA-256 digest")
+        if not _DIGEST_RE.fullmatch(self.subject_hash):
+            raise ValueError("subject_hash must be a lowercase SHA-256 digest")
+        return self
+
+
+@dataclass(frozen=True, slots=True)
 class LawDossier:
     title: str
     observation: str
@@ -154,9 +167,17 @@ class DivineLegislationService:
             return False
         return self.storage.budget_balance(actor_id, BudgetKind.LEGISLATIVE) >= LAW_BUDGET_COST
 
-    def submit(self, actor_id: str, dossier: LawDossier) -> int:
+    def submit(
+        self,
+        actor_id: str,
+        dossier: LawDossier,
+        *,
+        provenance: ProposalProvenance | None = None,
+    ) -> int:
         self._active_divine_actor(actor_id)
         dossier.validated_for(actor_id)
+        if provenance is not None:
+            provenance.validated()
         now = self._now()
         with self.repository._connect() as conn:
             self.repository.begin_write(conn)
@@ -175,6 +196,20 @@ class DivineLegislationService:
                 ),
             )
             proposal_id = int(cursor.lastrowid)
+            if provenance is not None:
+                conn.execute(
+                    """
+                    INSERT INTO divine_proposal_provenance(
+                        proposal_id, session_hash, subject_hash, recorded_at_utc
+                    ) VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        proposal_id,
+                        provenance.session_hash,
+                        provenance.subject_hash,
+                        now.isoformat(),
+                    ),
+                )
             self.storage.append_audit_in_transaction(
                 conn,
                 event_type="law_drive_dossier_submitted",
