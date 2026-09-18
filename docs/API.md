@@ -96,3 +96,13 @@ Créateur uniquement :
 - `POST /admin/sanctions/{sanction_id}/lift`.
 
 Toutes les mutations administratives passent par `GovernanceAdminService`. Les commandes de monde restent soumises à la gouvernance finale du `CanonicalWorldWorker` au moment de leur exécution et juste avant commit.
+
+
+## Administration des sessions divines
+
+Routes Créateur uniquement :
+
+- `POST /admin/divine-sessions/bind` : lie une conversation à `father`, `herald`, `order` ou `chaos`. Corps : `session_id`, `subject_id`, `actor_id`.
+- `POST /admin/divine-sessions/revoke` : révoque une conversation liée. Corps : `session_id`, `reason`.
+
+Les identifiants bruts servent uniquement au calcul SHA-256 ; seuls leurs hashes sont persistés. Les routes refusent tout acteur non autorisé et restent protégées par l'authentification Créateur existante.
