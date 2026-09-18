@@ -144,3 +144,25 @@ Streamlit reste un Lab secondaire. Il n'est pas le processus qui fait vivre le m
 ## Frontend
 
 Le frontend React + TypeScript + PixiJS sera servi séparément, typiquement via Netlify. Il consomme l'API et ne contient ni secret Créateur ni accès direct à PostgreSQL.
+
+
+## Observatory exports
+
+The canonical Worker can publish read-only observation exports without slowing or changing biological state.
+
+Environment variables:
+
+- `LES_SLIMES_OBSERVATION_DIR`: enables filesystem observation exports.
+- `LES_SLIMES_OBSERVATION_LATEST_SECONDS`: latest-state cadence, default 1800 s.
+- `LES_SLIMES_OBSERVATION_SNAPSHOT_SECONDS`: historical snapshot cadence, default 21600 s.
+- `LES_SLIMES_OBSERVATION_DAILY_SECONDS`: daily export cadence, default 86400 s.
+
+The production compose file mounts a persistent `les-slimes-observations` volume and writes atomically:
+
+- `LATEST_WORLD_STATE.json`;
+- `snapshots/snapshot-<timestamp>-tick-<tick>.json`;
+- `daily/daily-<timestamp>-tick-<tick>.json`.
+
+These files are observation artifacts only. PostgreSQL remains the canonical state. A later Drive publisher/sync process may copy them into `15_WORLD_OBSERVATORY` without granting Drive any transactional role.
+
+The public API also exposes `GET /world/observation` for an instantaneous synthesized, read-only scientific state.
