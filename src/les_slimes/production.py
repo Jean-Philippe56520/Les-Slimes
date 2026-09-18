@@ -15,6 +15,7 @@ from .database.factory import DATABASE_URL_ENV, canonical_repository_from_env
 from .database.migrate import migrate_sqlite_to_postgres
 from .database.postgres_repo import PostgreSQLRepository
 from .database.sqlite_repo import SQLiteRepository
+from .observer.world_observatory import FilesystemObservationSink, ObservationSchedule, WorldObservationPublisher
 from .runtime import CanonicalRuntime, CanonicalWorkerService, RuntimeStorage, WorkerServiceConfig
 from .world.engine import World
 
@@ -35,8 +36,21 @@ def create_api_app():
 
 
 def _service() -> CanonicalWorkerService:
+    repository = canonical_repository_from_env()
+    observation_dir = os.getenv("LES_SLIMES_OBSERVATION_DIR", "").strip()
+    publisher = None
+    if observation_dir:
+        publisher = WorldObservationPublisher(
+            repository,
+            FilesystemObservationSink(observation_dir),
+            schedule=ObservationSchedule(
+                latest_interval_seconds=_float_env("LES_SLIMES_OBSERVATION_LATEST_SECONDS", 1800.0),
+                snapshot_interval_seconds=_float_env("LES_SLIMES_OBSERVATION_SNAPSHOT_SECONDS", 21600.0),
+                daily_interval_seconds=_float_env("LES_SLIMES_OBSERVATION_DAILY_SECONDS", 86400.0),
+            ),
+        )
     return CanonicalWorkerService(
-        canonical_repository_from_env(),
+        repository,
         holder_id=os.getenv("LES_SLIMES_WORKER_ID") or None,
         config=WorkerServiceConfig(
             poll_interval_seconds=_float_env("LES_SLIMES_WORKER_POLL_SECONDS", 1.0),
@@ -47,6 +61,7 @@ def _service() -> CanonicalWorkerService:
             batch_size=_int_env("LES_SLIMES_WORKER_BATCH_SIZE", 1000),
             command_page_size=_int_env("LES_SLIMES_WORKER_COMMAND_PAGE_SIZE", 1000),
         ),
+        observation_publisher=publisher,
     )
 
 

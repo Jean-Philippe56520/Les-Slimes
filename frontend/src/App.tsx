@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { API_BASE_URL, fetchCanonicalSnapshot } from './api';
-import type { CanonicalSnapshot } from './types';
+import {
+  API_BASE_URL,
+  enqueueCanonicalCommand,
+  fetchCanonicalSnapshot,
+  fetchIdentity,
+} from './api';
+import type { ActorIdentity, CanonicalSnapshot } from './types';
 import { WorldCanvas } from './WorldCanvas';
 
 const POLL_INTERVAL_MS = 1200;
+const HERALD_TOKEN_KEY = 'les-slimes-herald-token';
 
 function formatMetric(value: number, digits = 0): string {
   return new Intl.NumberFormat('fr-FR', {
@@ -29,6 +35,16 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<CanonicalSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [heraldToken, setHeraldToken] = useState(() => sessionStorage.getItem(HERALD_TOKEN_KEY) ?? '');
+  const [identity, setIdentity] = useState<ActorIdentity | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [commandMessage, setCommandMessage] = useState<string | null>(null);
+  const [commandBusy, setCommandBusy] = useState(false);
+  const [x, setX] = useState(10);
+  const [y, setY] = useState(10);
+  const [foodCount, setFoodCount] = useState(1);
+  const [signal, setSignal] = useState('S1');
+  const [signalRadius, setSignalRadius] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -62,6 +78,27 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!heraldToken) {
+      setIdentity(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchIdentity(heraldToken)
+      .then((actor) => {
+        if (cancelled) return;
+        setIdentity(actor);
+        setAuthError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setIdentity(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const status = statusLabel(snapshot);
   const generation = snapshot?.world.max_generation ?? 0;
   const actionCounts = useMemo(() => {
@@ -73,6 +110,56 @@ export default function App() {
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
   }, [snapshot]);
+
+  const canDepositFood = identity?.permissions.includes('world.deposit_food') ?? false;
+  const canEmitSignal = identity?.permissions.includes('world.emit_signal') ?? false;
+
+  const connectHerald = async () => {
+    const token = heraldToken.trim();
+    if (!token) {
+      setAuthError('Jeton requis.');
+      return;
+    }
+    try {
+      const actor = await fetchIdentity(token);
+      sessionStorage.setItem(HERALD_TOKEN_KEY, token);
+      setHeraldToken(token);
+      setIdentity(actor);
+      setAuthError(null);
+      setCommandMessage(null);
+    } catch (reason) {
+      sessionStorage.removeItem(HERALD_TOKEN_KEY);
+      setIdentity(null);
+      setAuthError(reason instanceof Error ? reason.message : 'Authentification impossible');
+    }
+  };
+
+  const disconnectHerald = () => {
+    sessionStorage.removeItem(HERALD_TOKEN_KEY);
+    setHeraldToken('');
+    setIdentity(null);
+    setAuthError(null);
+    setCommandMessage(null);
+  };
+
+  const submitCommand = async (
+    commandType: 'deposit_food' | 'emit_signal',
+    payload: Record<string, unknown>,
+  ) => {
+    if (!identity || !heraldToken) return;
+    setCommandBusy(true);
+    setCommandMessage(null);
+    try {
+      const command = await enqueueCanonicalCommand(heraldToken, commandType, payload);
+      setCommandMessage(
+        `Commande #${command.sequence} mise en file comme ${command.actor_id}. Le Worker revalidera la gouvernance avant application.`,
+      );
+    } catch (reason) {
+      setCommandMessage(reason instanceof Error ? reason.message : 'Commande refusée');
+    } finally {
+      setCommandBusy(false);
+    }
+  };
 
   return (
     <main className="app-shell">
@@ -175,8 +262,98 @@ export default function App() {
         </aside>
       </section>
 
+      <section className="herald-console">
+        <div className="herald-console__header">
+          <div>
+            <p className="panel-kicker">CONSOLE HÉRAUT</p>
+            <h2>Interventions humaines attribuées</h2>
+          </div>
+          {identity ? (
+            <button className="secondary-button" type="button" onClick={disconnectHerald}>
+              Déconnecter
+            </button>
+          ) : null}
+        </div>
+
+        {!identity ? (
+          <div className="herald-login">
+            <label>
+              Jeton d'acteur
+              <input
+                type="password"
+                value={heraldToken}
+                onChange={(event) => setHeraldToken(event.target.value)}
+                placeholder="Jeton Héraut"
+                autoComplete="off"
+              />
+            </label>
+            <button type="button" onClick={() => void connectHerald()}>S'authentifier</button>
+            <small>Le jeton reste uniquement dans la session du navigateur et n'est jamais inclus dans le build.</small>
+            {authError ? <p className="console-message console-message--error">{authError}</p> : null}
+          </div>
+        ) : (
+          <>
+            <div className="actor-strip">
+              <span>Acteur authentifié</span>
+              <strong>{identity.display_name}</strong>
+              <code>{identity.id}</code>
+              {identity.id !== 'herald' ? <em>Cette console est prévue pour le Héraut.</em> : null}
+            </div>
+
+            <div className="command-grid">
+              <form
+                className="command-card"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitCommand('deposit_food', { x, y, count: foodCount });
+                }}
+              >
+                <div>
+                  <span>Miracle</span>
+                  <h3>Déposer de la nourriture</h3>
+                </div>
+                <label>X<input type="number" step="0.1" value={x} onChange={(event) => setX(Number(event.target.value))} /></label>
+                <label>Y<input type="number" step="0.1" value={y} onChange={(event) => setY(Number(event.target.value))} /></label>
+                <label>Quantité<input type="number" min="1" max="100" value={foodCount} onChange={(event) => setFoodCount(Number(event.target.value))} /></label>
+                <button type="submit" disabled={!canDepositFood || commandBusy}>Déposer</button>
+                {!canDepositFood ? <small>Permission world.deposit_food non accordée.</small> : null}
+              </form>
+
+              <form
+                className="command-card"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const radius = signalRadius.trim() ? Number(signalRadius) : undefined;
+                  void submitCommand('emit_signal', {
+                    signal,
+                    x,
+                    y,
+                    ...(radius === undefined ? {} : { radius }),
+                  });
+                }}
+              >
+                <div>
+                  <span>Miracle</span>
+                  <h3>Émettre un signal</h3>
+                </div>
+                <label>
+                  Signal
+                  <select value={signal} onChange={(event) => setSignal(event.target.value)}>
+                    <option>S1</option><option>S2</option><option>S3</option><option>S4</option>
+                  </select>
+                </label>
+                <label>Rayon optionnel<input type="number" min="0" step="0.1" value={signalRadius} onChange={(event) => setSignalRadius(event.target.value)} /></label>
+                <button type="submit" disabled={!canEmitSignal || commandBusy}>Émettre</button>
+                {!canEmitSignal ? <small>Permission world.emit_signal non accordée.</small> : null}
+              </form>
+            </div>
+            {commandMessage ? <p className="console-message">{commandMessage}</p> : null}
+          </>
+        )}
+      </section>
+
       <footer className="footer-line">
-        <span>Lecture seule — le navigateur n’exécute aucun tick.</span>
+        <span>Le navigateur n'exécute aucun tick. Les interventions passent par la command queue et le Worker.</span>
         <span>
           {snapshot
             ? `Reçu ${new Date(snapshot.receivedAt).toLocaleTimeString('fr-FR')}`

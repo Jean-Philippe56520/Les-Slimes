@@ -120,6 +120,14 @@ Les surfaces de gouvernance, identité, authentification, persistance canonique,
 
 Voir `docs/DIVINE_AUTONOMY.md`, `docs/GOD_CREATOR_INSTRUCTIONS.md` et `docs/PROJECT_STATE.md`.
 
+## Observation indirecte et Héraut
+
+Le MCP n'est pas nécessaire pour commencer l'interaction divine indirecte. Le Worker peut produire automatiquement des observations scientifiques périodiques du Monde sur un volume durable : état récent toutes les 30 minutes, snapshot toutes les 6 heures et export quotidien. `GET /world/observation` fournit également une vue synthétique instantanée read-only.
+
+Ces exports sont conçus pour être synchronisés vers le dossier Drive `15_WORLD_OBSERVATORY` afin qu'Ordre et Chaos puissent étudier l'histoire du Monde avec GitHub (Lois) + Drive (observations), sans accès direct au moteur.
+
+Le frontend contient aussi une console Héraut authentifiée pour les actions humaines déjà définies par le moteur, notamment dépôt de nourriture et émission de signal. L'interface n'accorde aucun droit : elle n'active une action que si la gouvernance a réellement accordé permission/pouvoir/budget, puis la commande suit toujours la queue canonique et le Worker.
+
 ## API canonique
 
 FastAPI fournit la frontière réseau :

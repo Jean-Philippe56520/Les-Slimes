@@ -211,3 +211,59 @@ def test_crash_takeover_matches_continuous_digest_with_command(tmp_path):
 
     assert result_b.final_advance.current_tick == 20
     assert restarted.load_world().state_digest() == continuous.load_world().state_digest()
+
+
+
+class RecordingPublisher:
+    def __init__(self):
+        self.calls = []
+
+    def maybe_publish(self, *, observed_at_utc):
+        self.calls.append(observed_at_utc)
+        return ("latest",)
+
+
+def test_worker_cycle_publishes_observation_after_world_advance(tmp_path):
+    start = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+    repo = build_repo(tmp_path, "observed.sqlite")
+    CanonicalRuntime(repo).ensure_initialized(start)
+    clock = FakeServiceClock(start + timedelta(seconds=5))
+    publisher = RecordingPublisher()
+    service = CanonicalWorkerService(
+        repo,
+        holder_id="observed-worker",
+        clock=clock,
+        observation_publisher=publisher,
+    )
+
+    result = service.cycle()
+
+    assert result.final_advance.current_tick == 5
+    assert publisher.calls == [start + timedelta(seconds=5)]
+    service.close()
+
+
+
+class FailingPublisher:
+    def maybe_publish(self, *, observed_at_utc):
+        raise RuntimeError("archive unavailable")
+
+
+def test_observation_export_failure_never_stops_canonical_world(tmp_path):
+    start = datetime(2026, 9, 18, 9, 0, tzinfo=UTC)
+    repo = build_repo(tmp_path, "export-failure.sqlite")
+    CanonicalRuntime(repo).ensure_initialized(start)
+    clock = FakeServiceClock(start + timedelta(seconds=3))
+    service = CanonicalWorkerService(
+        repo,
+        holder_id="resilient-worker",
+        clock=clock,
+        observation_publisher=FailingPublisher(),
+    )
+
+    result = service.cycle()
+
+    assert result.final_advance.current_tick == 3
+    assert repo.load_world().tick == 3
+    assert service.last_observation_error == "RuntimeError: archive unavailable"
+    service.close()

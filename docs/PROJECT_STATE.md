@@ -181,6 +181,29 @@ Les textes divins ne réintroduisent pas le cadrage extérieur interdit et les i
 
 Les routes Père `POST /admin/divine-sessions/bind` et `POST /admin/divine-sessions/revoke` permettent de gérer les conversations opérationnelles. Les identifiants bruts ne sont jamais persistés.
 
+## Observatoire indirect du Monde présent
+
+Le MCP n'est plus bloquant pour la prochaine phase. Le Monde peut désormais produire et exposer des états scientifiques sans interaction directe des dieux.
+
+`WorldObservationBuilder` synthétise à l'instant T : tick, digest biologique, métriques démographiques, nourriture, comportements, mémoire/relations, signaux, générations et statistiques génétiques.
+
+`WorldObservationPublisher` peut publier automatiquement depuis le Worker selon trois cadences par défaut :
+- latest : 30 minutes ;
+- snapshot historique : 6 heures ;
+- daily : 24 heures.
+
+`FilesystemObservationSink` écrit atomiquement `LATEST_WORLD_STATE.json` et conserve les snapshots/daily sur volume durable. La base canonique reste la seule source transactionnelle.
+
+Drive contient maintenant `15_WORLD_OBSERVATORY`, `LATEST_WORLD_STATE` et `WORLD_OBSERVATION_INDEX`. Le branchement automatique Google Drive reste à déployer ; aucune donnée de Monde n'y est inventée tant qu'aucun Worker distant ne publie réellement.
+
+L'API publique `GET /world/observation` donne également l'état synthétique instantané.
+
+### Console Héraut
+
+Le frontend React contient une console humaine authentifiée. Le Héraut peut saisir son token dans le navigateur (sessionStorage uniquement), résoudre son identité via `/me` puis envoyer `deposit_food` ou `emit_signal` si et seulement si les permissions correspondantes lui ont été accordées.
+
+Toute action passe toujours par `POST /commands` -> command queue -> Worker -> GovernancePolicy -> persistance atomique. Le Héraut reste Observation-only par défaut ; aucune permission n'est accordée automatiquement par l'interface.
+
 ## API canonique présente
 
 FastAPI fournit la frontière réseau :

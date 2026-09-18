@@ -63,3 +63,12 @@ L'Observateur ne peut jamais :
 - écrire dans un autre repo.
 
 Toute intervention issue d'une proposition doit être attribuable et traverser la command queue, la gouvernance puis le writer unique.
+
+
+## Observations périodiques du Monde
+
+L'Observateur et les dieux peuvent travailler à partir d'états datés sans accès direct au moteur. Les exports d'observation sont des projections read-only de la base canonique et doivent toujours conserver tick, horodatage UTC et `state_digest`.
+
+Une suite de snapshots permet d'étudier des trajectoires ; elle ne transforme jamais une corrélation temporelle en preuve causale. Toute conclusion importante reste soumise aux exigences multi-seeds/contrôle du protocole scientifique.
+
+Drive peut archiver ces exports mais ne devient jamais la source transactionnelle du Monde.
