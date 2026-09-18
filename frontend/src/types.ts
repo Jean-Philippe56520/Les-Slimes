@@ -69,3 +69,48 @@ export interface CanonicalSnapshot {
   health: RuntimeHealth;
   receivedAt: number;
 }
+
+
+export interface ActorIdentity {
+  id: string;
+  kind: string;
+  display_name: string;
+  permissions: string[];
+  active: boolean;
+}
+
+export interface CanonicalCommand {
+  id: number;
+  sequence: number;
+  actor_id: string;
+  command_type: string;
+  payload: Record<string, unknown>;
+  status: string;
+  idempotency_key: string;
+  created_at_utc: string;
+}
+
+export interface WorldObservation {
+  schema_version: number;
+  observed_at_utc: string;
+  tick: number;
+  state_digest: string;
+  runtime: {
+    last_simulated_at_utc: string;
+    tick_duration_seconds: number;
+    lag_seconds: number;
+    ticks_due: number;
+  };
+  world: WorldSummary;
+  behaviour: {
+    action_counts: Record<string, number>;
+    mean_memories_per_slime: number;
+    mean_relations_per_slime: number;
+    heard_signals_total: number;
+    signal_associations_total: number;
+  };
+  genetics: {
+    traits: Record<string, { mean: number; stddev: number }>;
+    generation_counts: Record<string, number>;
+  };
+}
