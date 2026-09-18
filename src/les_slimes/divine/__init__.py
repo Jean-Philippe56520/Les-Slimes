@@ -1,7 +1,12 @@
 """Domain primitives for confined divine autonomy and sovereign review."""
 
 from .access import DivineAccessPolicy, DivineSurface
-from .archive_gateway import ArchiveItem, ArchiveProvider, DivineArchiveGateway
+from .archive_gateway import (
+    ArchiveItem,
+    ArchiveProvider,
+    CreatorArchiveGateway,
+    DivineArchiveGateway,
+)
 from .git_gateway import (
     CreatorGitGateway,
     DivineGitGateway,
@@ -17,7 +22,9 @@ from .promulgation import (
 )
 from .sovereign import (
     CreatorDecision,
+    CreatorImplementation,
     CreatorReview,
+    ImplementationAuthorization,
     LawCandidate,
     MergeAuthorization,
     SovereignCreatorCycle,
@@ -28,8 +35,10 @@ __all__ = [
     "ArchiveItem",
     "ArchiveProvider",
     "CanonicalApiProvider",
+    "CreatorArchiveGateway",
     "CreatorDecision",
     "CreatorGitGateway",
+    "CreatorImplementation",
     "CreatorPromulgationService",
     "CreatorReview",
     "DivineAccessPolicy",
@@ -40,6 +49,7 @@ __all__ = [
     "DivineWorldGateway",
     "GitMergeResult",
     "GitProvider",
+    "ImplementationAuthorization",
     "LawCandidate",
     "LawDossier",
     "LegislativeStatus",
