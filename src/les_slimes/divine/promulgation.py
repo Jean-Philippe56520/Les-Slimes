@@ -8,10 +8,10 @@ from ..database.base import RelationalRepository
 from ..governance.models import BudgetKind, PowerLevel, SanctionType
 from ..governance.storage import GovernanceStorage
 from ..runtime.storage import RuntimeStorage
-from .access import AUTHORIZED_REPOSITORY, DivineAccessPolicy
+from .access import DivineAccessPolicy
 from .git_gateway import CreatorGitGateway, GitProvider, PullRequestSnapshot
 from .legislation import LAW_BUDGET_COST, DivineLegislationService, LegislativeStatus
-from .sovereign import MergeAuthorization
+from .sovereign import CreatorImplementation, MergeAuthorization, merge_authorization_from_implementation
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,21 +72,37 @@ class CreatorPromulgationService:
             )
         return True
 
-    def _authorization_from_dossier(self, stored: dict) -> MergeAuthorization:
+    def _implementation_from_dossier(self, stored: dict) -> CreatorImplementation:
         if stored["status"] != LegislativeStatus.ACCEPTED.value:
             raise PromulgationBlocked("Only an accepted Law may be promulgated")
         payload = stored["payload"]
         review = payload.get("last_review") or {}
         if review.get("decision") != "accept" or review.get("blockers") not in ([], ()):
-            raise PromulgationBlocked("Persisted Creator review does not authorize merge")
-        return MergeAuthorization(
-            repository_full_name=AUTHORIZED_REPOSITORY,
-            pr_number=int(payload["pr_number"]),
-            expected_head_sha=str(payload["head_sha"]),
-            expected_base_sha=str(payload["base_sha"]),
-            candidate_actor_id=str(stored["actor_id"]),
-            proposal_id=int(stored["id"]),
-        )
+            raise PromulgationBlocked("Persisted Creator review does not authorize implementation")
+        raw = payload.get("creator_implementation")
+        if not isinstance(raw, dict):
+            raise PromulgationBlocked("Accepted Law has no Creator Git implementation")
+        implementation = CreatorImplementation(
+            proposal_id=int(raw["proposal_id"]),
+            candidate_actor_id=str(raw["candidate_actor_id"]),
+            branch=str(raw["branch"]),
+            pr_number=int(raw["pr_number"]),
+            head_sha=str(raw["head_sha"]),
+            base_sha=str(raw["base_sha"]),
+            implemented_files=tuple(raw["implemented_files"]),
+            required_checks=tuple(raw["required_checks"]),
+        ).validated()
+        if implementation.proposal_id != int(stored["id"]):
+            raise PromulgationBlocked("Creator implementation targets another proposal")
+        if implementation.candidate_actor_id != str(stored["actor_id"]):
+            raise PromulgationBlocked("Creator implementation actor does not match proposal")
+        return implementation
+
+    def _authorization_from_dossier(
+        self, stored: dict
+    ) -> tuple[CreatorImplementation, MergeAuthorization]:
+        implementation = self._implementation_from_dossier(stored)
+        return implementation, merge_authorization_from_implementation(implementation)
 
     @staticmethod
     def _promulgation_state(stored: dict) -> dict:
@@ -96,26 +112,26 @@ class CreatorPromulgationService:
     def _preflight_blockers(
         self,
         stored: dict,
+        implementation: CreatorImplementation,
         authorization: MergeAuthorization,
         snapshot: PullRequestSnapshot,
         *,
         require_budget: bool,
     ) -> tuple[str, ...]:
-        payload = stored["payload"]
         blockers: list[str] = []
         if snapshot.number != authorization.pr_number:
             blockers.append("pull request number changed")
-        if snapshot.head_branch != payload["branch"]:
+        if snapshot.head_branch != implementation.branch:
             blockers.append("pull request head branch changed")
         if snapshot.head_sha != authorization.expected_head_sha:
-            blockers.append("pull request head SHA changed after Creator review")
+            blockers.append("pull request head SHA changed after Creator implementation review")
         if snapshot.base_branch != "main":
             blockers.append("pull request no longer targets main")
         main_sha = self.git.main_sha()
         if main_sha != authorization.expected_base_sha:
-            blockers.append("main changed after Creator review")
+            blockers.append("main changed after Creator implementation")
         if snapshot.base_sha != authorization.expected_base_sha:
-            blockers.append("pull request base SHA changed after Creator review")
+            blockers.append("pull request base SHA changed after Creator implementation")
 
         policy = DivineAccessPolicy(authorization.candidate_actor_id)
         try:
@@ -125,11 +141,13 @@ class CreatorPromulgationService:
         else:
             if not changed_files:
                 blockers.append("pull request changes no files")
+            if set(changed_files) != set(implementation.implemented_files):
+                blockers.append("pull request file set differs from recorded Creator implementation")
             for path in changed_files:
                 try:
-                    policy.assert_divine_write_path(path)
+                    policy.assert_law_target_path(path)
                 except PermissionError:
-                    blockers.append(f"protected file changed by divine Law: {path}")
+                    blockers.append(f"protected file changed by ordinary divine Law: {path}")
 
         if not snapshot.merged:
             if snapshot.state != "open":
@@ -137,7 +155,7 @@ class CreatorPromulgationService:
             if not snapshot.mergeable:
                 blockers.append("pull request is not mergeable")
             passed = self.git.passed_checks(authorization.expected_head_sha)
-            missing = sorted(set(payload["required_checks"]) - set(passed))
+            missing = sorted(set(implementation.required_checks) - set(passed))
             if missing:
                 blockers.append("required checks not passed: " + ", ".join(missing))
         if not self._governance_valid(
@@ -147,7 +165,7 @@ class CreatorPromulgationService:
             blockers.append("Law is no longer eligible under current governance")
         return tuple(blockers)
 
-    def _reserve_budget(self, stored: dict, authorization: MergeAuthorization) -> None:
+    def _reserve_budget(self, authorization: MergeAuthorization) -> None:
         proposal_id = authorization.proposal_id
         actor_id = authorization.candidate_actor_id
         now = self._now()
@@ -199,6 +217,7 @@ class CreatorPromulgationService:
                 "state": "prepared",
                 "attempt": attempt,
                 "intervention_id": intervention_id,
+                "branch": authorization.branch,
                 "expected_head_sha": authorization.expected_head_sha,
                 "expected_base_sha": authorization.expected_base_sha,
                 "prepared_at_utc": now.isoformat(),
@@ -216,6 +235,7 @@ class CreatorPromulgationService:
                     "proposal_id": proposal_id,
                     "attempt": attempt,
                     "intervention_id": intervention_id,
+                    "branch": authorization.branch,
                     "head_sha": authorization.expected_head_sha,
                     "base_sha": authorization.expected_base_sha,
                 },
@@ -385,7 +405,7 @@ class CreatorPromulgationService:
                 raise RuntimeError("Promulgated Law is missing its merge commit")
             return PromulgationResult(proposal_id, merge_commit, True)
 
-        authorization = self._authorization_from_dossier(stored)
+        implementation, authorization = self._authorization_from_dossier(stored)
         snapshot = self.git.pull_request(authorization.pr_number)
         state = self._promulgation_state(stored)
 
@@ -396,6 +416,8 @@ class CreatorPromulgationService:
                 )
             if snapshot.head_sha != authorization.expected_head_sha:
                 raise PromulgationBlocked("Merged pull request head does not match authorization")
+            if snapshot.head_branch != authorization.branch:
+                raise PromulgationBlocked("Merged pull request branch does not match authorization")
             if not snapshot.merge_commit_sha:
                 raise RuntimeError("Merged pull request is missing merge commit SHA")
             return self._finalize(
@@ -406,6 +428,7 @@ class CreatorPromulgationService:
 
         blockers = self._preflight_blockers(
             stored,
+            implementation,
             authorization,
             snapshot,
             require_budget=state.get("state") not in {"prepared", "uncertain"},
@@ -415,13 +438,14 @@ class CreatorPromulgationService:
                 self._release_budget(proposal_id, reason="; ".join(blockers))
             raise PromulgationBlocked("; ".join(blockers))
 
-        self._reserve_budget(stored, authorization)
+        self._reserve_budget(authorization)
 
-        # Re-read every mutable external and governance condition after reservation.
         stored = self.legislation.get(proposal_id)
+        implementation, authorization = self._authorization_from_dossier(stored)
         snapshot = self.git.pull_request(authorization.pr_number)
         blockers = self._preflight_blockers(
             stored,
+            implementation,
             authorization,
             snapshot,
             require_budget=False,
