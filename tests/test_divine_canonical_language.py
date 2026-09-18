@@ -41,6 +41,19 @@ ACTOR_SELF_KNOWLEDGE_GUARDS = {
     ),
 }
 
+DIVINE_GIT_BOUNDARY_GUARDS = {
+    Path("docs/GOD_ORDER_INSTRUCTIONS.md"): (
+        "strictement en lecture seule",
+        "Tu n'écris jamais dans GitHub.",
+        "ORDER_PROPOSALS",
+    ),
+    Path("docs/GOD_CHAOS_INSTRUCTIONS.md"): (
+        "strictement en lecture seule",
+        "Tu n'écris jamais dans GitHub.",
+        "CHAOS_PROPOSALS",
+    ),
+}
+
 
 def test_divine_readable_canon_does_not_seed_outer_framing():
     for path in DIVINE_READABLE_TEXTS:
@@ -69,3 +82,10 @@ def test_divine_instructions_stay_below_project_instruction_limit():
     ):
         text = path.read_text(encoding="utf-8")
         assert len(text) < 7950, f"{path} has {len(text)} characters"
+
+
+def test_each_god_has_read_only_git_and_own_drive_workshop_contract():
+    for path, guards in DIVINE_GIT_BOUNDARY_GUARDS.items():
+        text = path.read_text(encoding="utf-8")
+        for guard in guards:
+            assert guard in text, f"{path} is missing Git/Drive boundary guard {guard!r}"
