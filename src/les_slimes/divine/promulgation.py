@@ -9,7 +9,7 @@ from ..governance.models import BudgetKind, PowerLevel, SanctionType
 from ..governance.storage import GovernanceStorage
 from ..runtime.storage import RuntimeStorage
 from .access import DivineAccessPolicy
-from .git_gateway import CreatorGitGateway, GitProvider, PullRequestSnapshot
+from .git_gateway import CreatorGitGateway, CreatorGitProvider, PullRequestSnapshot
 from .legislation import LAW_BUDGET_COST, DivineLegislationService, LegislativeStatus
 from .sovereign import CreatorImplementation, MergeAuthorization, merge_authorization_from_implementation
 
@@ -34,7 +34,7 @@ class CreatorPromulgationService:
     the reservation until the next reconciliation instead of refunding speculatively.
     """
 
-    def __init__(self, repository: RelationalRepository, provider: GitProvider) -> None:
+    def __init__(self, repository: RelationalRepository, provider: CreatorGitProvider) -> None:
         self.repository = repository
         self.git = CreatorGitGateway(provider)
         self.legislation = DivineLegislationService(repository)
