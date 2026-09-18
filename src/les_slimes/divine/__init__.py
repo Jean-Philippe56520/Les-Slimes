@@ -1,6 +1,7 @@
 """Domain primitives for confined divine autonomy and sovereign review."""
 
 from .access import DivineAccessPolicy, DivineSurface
+from .actor_gateway import CanonicalApiProviderFactory, DivineActorGateway, DivineRequestMetadata
 from .archive_gateway import (
     ArchiveItem,
     ArchiveProvider,
@@ -37,6 +38,7 @@ __all__ = [
     "ArchiveItem",
     "ArchiveProvider",
     "CanonicalApiProvider",
+    "CanonicalApiProviderFactory",
     "CreatorArchiveGateway",
     "CreatorDecision",
     "CreatorGitGateway",
@@ -45,6 +47,8 @@ __all__ = [
     "CreatorPromulgationService",
     "CreatorReview",
     "DivineAccessPolicy",
+    "DivineActorGateway",
+    "DivineRequestMetadata",
     "DivineArchiveGateway",
     "DivineGitGateway",
     "DivineLegislationService",
